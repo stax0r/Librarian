@@ -272,15 +272,19 @@ button:hover { opacity: 0.9; }
     color: #fff;
 }
 
-/* Compact & Themed Footer Styles */
+/* Standardized Footer Styles */
 .site-footer {
+    border-top: 1px solid #333;
+    margin-top: 40px;
+    width: 100%;
+    background-color: transparent;
+}
+
+.footer-content {
     display: flex;
     justify-content: space-between;
     align-items: center;
-    padding: 15px 30px;
-    background-color: transparent;
-    border-top: 1px solid #333;
-    margin-top: 40px;
+    padding: 15px 0;
     max-width: 1200px;
     margin-left: auto;
     margin-right: auto;
@@ -289,7 +293,7 @@ button:hover { opacity: 0.9; }
     color: #aaa;
 }
 
-.site-footer code {
+.footer-content code {
     background-color: rgba(255, 255, 255, 0.1);
     padding: 3px 6px;
     border-radius: 4px;
