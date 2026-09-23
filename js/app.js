@@ -1,5 +1,5 @@
 import { db } from "./firebase-config.js";
-import { collection, getDocs } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
+import { ref, get, child } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-database.js";
 
 document.addEventListener("DOMContentLoaded", () => {
     loadPublicCatalog();
@@ -12,24 +12,25 @@ async function loadPublicCatalog() {
     catalogContainer.innerHTML = '';
     
     try {
-        const querySnapshot = await getDocs(collection(db, "books"));
+        const dbRef = ref(db);
+        const snapshot = await get(child(dbRef, "books"));
         
+        if (!snapshot.exists()) {
+            catalogContainer.innerHTML = '<p class="loading-text">No books found in the library archive.</p>';
+            return;
+        }
+
         let availableBooks = [];
         let unavailableBooks = [];
 
-        querySnapshot.forEach((docSnap) => {
-            const book = { id: docSnap.id, ...docSnap.data() };
+        snapshot.forEach((childSnap) => {
+            const book = { id: childSnap.key, ...childSnap.val() };
             if (book.availableStock > 0) {
                 availableBooks.push(book);
             } else {
                 unavailableBooks.push(book);
             }
         });
-
-        if (availableBooks.length === 0 && unavailableBooks.length === 0) {
-            catalogContainer.innerHTML = '<p class="loading-text">No books found in the library archive.</p>';
-            return;
-        }
 
         availableBooks.forEach(book => {
             catalogContainer.innerHTML += `

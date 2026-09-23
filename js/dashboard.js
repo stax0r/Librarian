@@ -1,19 +1,16 @@
 import { auth, db } from "./firebase-config.js";
 import { signOut, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
-import { collection, getDocs, addDoc } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
+import { ref, set, push, get, child } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-database.js";
 
-// X Days Overdue Threshold Constant
 const OVERDUE_LIMIT_DAYS = 7;
 
 function checkIsOverdue(checkoutDateString) {
     const checkoutDate = new Date(checkoutDateString);
     const today = new Date();
     const diffTime = Math.abs(today - checkoutDate);
-    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-    return diffDays > OVERDUE_LIMIT_DAYS;
+    return Math.ceil(diffTime / (1000 * 60 * 60 * 24)) > OVERDUE_LIMIT_DAYS;
 }
 
-// Protect Route
 onAuthStateChanged(auth, (user) => {
     if (!user) {
         window.location.href = 'login.html';
@@ -22,7 +19,6 @@ onAuthStateChanged(auth, (user) => {
     }
 });
 
-// Logout
 const logoutBtn = document.getElementById('logout-btn');
 if (logoutBtn) {
     logoutBtn.addEventListener('click', async () => {
@@ -38,7 +34,8 @@ if (memberForm) {
         e.preventDefault();
         const name = document.getElementById('member-name').value;
         try {
-            await addDoc(collection(db, "members"), { name });
+            const newMemberRef = push(ref(db, 'members'));
+            await set(newMemberRef, { name });
             alert("Character registered successfully!");
             document.getElementById('member-name').value = '';
         } catch (err) {
@@ -55,7 +52,8 @@ if (bookForm) {
         const title = document.getElementById('book-title').value;
         const totalStock = parseInt(document.getElementById('book-stock').value);
         try {
-            await addDoc(collection(db, "books"), {
+            const newBookRef = push(ref(db, 'books'));
+            await set(newBookRef, {
                 title,
                 totalStock,
                 availableStock: totalStock
@@ -69,7 +67,7 @@ if (bookForm) {
     });
 }
 
-// Load Rentals & Apply Overdue Warning Check
+// Load Rentals & Overdue Check
 async function loadDashboardData() {
     const rentalsList = document.getElementById('rentals-list');
     if (!rentalsList) return;
@@ -77,20 +75,22 @@ async function loadDashboardData() {
     rentalsList.innerHTML = '<p class="loading-text">Loading ledger records...</p>';
     
     try {
-        const querySnapshot = await getDocs(collection(db, "rentals"));
-        if (querySnapshot.empty) {
+        const dbRef = ref(db);
+        const snapshot = await get(child(dbRef, "rentals"));
+        
+        if (!snapshot.exists()) {
             rentalsList.innerHTML = '<p>No active rentals recorded in the ledger.</p>';
             return;
         }
 
         rentalsList.innerHTML = '';
-        querySnapshot.forEach((docSnap) => {
-            const rental = docSnap.data();
+        snapshot.forEach((childSnap) => {
+            const rental = childSnap.val();
             const isOverdue = rental.checkoutDate ? checkIsOverdue(rental.checkoutDate) : false;
             
             rentalsList.innerHTML += `
                 <div class="rental-item ${isOverdue ? 'overdue-warning' : ''}">
-                    <p><strong>Book ID:</strong> ${rental.bookId} | <strong>Borrower:</strong> ${rental.memberName}</p>
+                    <p><strong>Book:</strong> ${rental.bookTitle || rental.bookId} | <strong>Borrower:</strong> ${rental.memberName}</p>
                     ${isOverdue ? '<span class="badge-warning">⚠️ OVERDUE WARNING (> ' + OVERDUE_LIMIT_DAYS + ' days)</span>' : ''}
                 </div>
             `;
