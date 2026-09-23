@@ -17,7 +17,7 @@
     </header>
 
     <main class="dashboard-container">
-        <!-- Section 1: Registered Members (Scrollable) -->
+        <!-- Section 1: Registered Members (Scrollable & Detailed) -->
         <section class="dash-card">
             <h2>Registered Members</h2>
             <div id="members-list" class="card-scroll-area">
@@ -25,23 +25,15 @@
             </div>
         </section>
 
-        <!-- Section 2: Update Existing Book Inventory Quantity (Scrollable) -->
+        <!-- Section 2: Live Inventory Stock (Direct + / - management) -->
         <section class="dash-card">
-            <h2>Update Book Inventory Quantity</h2>
-            <form id="update-stock-form">
-                <div class="form-group">
-                    <select id="update-book-select" required>
-                        <option value="">Select Book to Update...</option>
-                    </select>
-                </div>
-                <div class="form-group">
-                    <input type="number" id="additional-stock-input" placeholder="Copies to Add (+/-)" required>
-                </div>
-                <button type="submit" class="btn-primary">Update Quantity</button>
-            </form>
+            <h2>Live Inventory Stock</h2>
+            <div id="admin-inventory-list" class="card-scroll-area">
+                <p class="loading-text">Loading inventory...</p>
+            </div>
         </section>
 
-        <!-- Section 3: Checkout Book (Scrollable) -->
+        <!-- Section 3: Checkout Book -->
         <section class="dash-card">
             <h2>Checkout Book to Character</h2>
             <form id="checkout-form">
@@ -63,15 +55,7 @@
             </form>
         </section>
 
-        <!-- Section 4: Live Inventory Stock (Scrollable) -->
-        <section class="dash-card">
-            <h2>Live Inventory Stock</h2>
-            <div id="admin-inventory-list" class="card-scroll-area">
-                <p class="loading-text">Loading inventory...</p>
-            </div>
-        </section>
-
-        <!-- Section 5: Active Rentals & Returns Ledger (Dynamic / Expands) -->
+        <!-- Section 4: Active Rentals & Returns Ledger (Dynamic / Expands) -->
         <section class="dash-card full-width">
             <h2>Active Rentals & Returns Ledger</h2>
             <div id="rentals-list">
@@ -79,6 +63,9 @@
             </div>
         </section>
     </main>
+
+    <!-- Toast Notification Container -->
+    <div id="toast-container"></div>
 
     <!-- Modal: Register Member -->
     <div id="member-modal" class="modal">

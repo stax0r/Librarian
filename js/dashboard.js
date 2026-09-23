@@ -21,6 +21,24 @@ if (logoutBtn) {
     });
 }
 
+// Toast Notification System
+function showToast(message, type = 'success') {
+    const container = document.getElementById('toast-container');
+    if (!container) return;
+
+    const toast = document.createElement('div');
+    toast.className = `toast ${type}`;
+    toast.textContent = message;
+    container.appendChild(toast);
+
+    setTimeout(() => toast.classList.add('show'), 50);
+
+    setTimeout(() => {
+        toast.classList.remove('show');
+        setTimeout(() => toast.remove(), 300);
+    }, 3000);
+}
+
 // Modal Toggle Logic
 const memberModal = document.getElementById('member-modal');
 const bookModal = document.getElementById('book-modal');
@@ -72,19 +90,19 @@ if (memberForm) {
             }
 
             if (duplicateFound) {
-                alert(`Error: A character named "${nameInput}" is already registered!`);
+                showToast(`Character "${nameInput}" is already registered!`, 'error');
                 return;
             }
 
             const newMemberRef = push(ref(db, 'members'));
             await set(newMemberRef, { name: nameInput });
-            alert("Character registered successfully!");
+            showToast(`Character "${nameInput}" registered successfully!`);
             document.getElementById('member-name').value = '';
             memberModal.style.display = 'none';
             loadAdminMembers();
             loadDropdowns();
         } catch (err) {
-            alert("Error adding member: " + err.message);
+            showToast("Error adding member: " + err.message, 'error');
         }
     });
 }
@@ -96,11 +114,11 @@ window.deleteMember = async function(memberKey, memberName) {
 
     try {
         await remove(ref(db, `members/${memberKey}`));
-        alert(`Character "${memberName}" deleted successfully.`);
+        showToast(`Character "${memberName}" deleted successfully.`);
         loadAdminMembers();
         loadDropdowns();
     } catch (err) {
-        alert("Error deleting member: " + err.message);
+        showToast("Error deleting member: " + err.message, 'error');
     }
 };
 
@@ -126,7 +144,7 @@ if (catalogBookForm) {
             }
 
             if (duplicateFound) {
-                alert(`Error: A book with the title "${titleInput}" already exists in the catalog!`);
+                showToast(`Book "${titleInput}" already exists in the catalog!`, 'error');
                 return;
             }
 
@@ -136,72 +154,46 @@ if (catalogBookForm) {
                 totalStock: 0,
                 availableStock: 0
             });
-            alert("New book added to catalog! Use the inventory tool to add copies.");
+            showToast(`"${titleInput}" added to catalog!`);
             document.getElementById('new-catalog-title').value = '';
             bookModal.style.display = 'none';
             loadAdminInventory();
             loadDropdowns();
         } catch (err) {
-            alert("Error adding book to catalog: " + err.message);
+            showToast("Error adding book to catalog: " + err.message, 'error');
         }
     });
 }
 
-// Update Quantity of Existing Book Inventory
-const updateStockForm = document.getElementById('update-stock-form');
-if (updateStockForm) {
-    updateStockForm.addEventListener('submit', async (e) => {
-        e.preventDefault();
-        const bookSelect = document.getElementById('update-book-select');
-        const bookId = bookSelect.value;
-        const qtyChange = parseInt(document.getElementById('additional-stock-input').value);
+// Direct Stock Adjustment from Inventory Card (+ / -)
+window.adjustStock = async function(bookId, bookTitle, currentTotal, currentAvailable, change) {
+    const newTotalStock = currentTotal + change;
+    const newAvailableStock = currentAvailable + change;
 
-        if (!bookId) {
-            alert("Please select a book to update.");
-            return;
-        }
+    if (newTotalStock < 0 || newAvailableStock < 0) {
+        showToast("Stock cannot drop below zero.", 'error');
+        return;
+    }
 
-        try {
-            const bookRef = ref(db, `books/${bookId}`);
-            const bookSnap = await get(bookRef);
+    try {
+        await update(ref(db, `books/${bookId}`), {
+            totalStock: newTotalStock,
+            availableStock: newAvailableStock
+        });
+        showToast(`Updated stock for "${bookTitle}"`);
+        loadAdminInventory();
+        loadDropdowns();
+    } catch (err) {
+        showToast("Error updating stock: " + err.message, 'error');
+    }
+};
 
-            if (!bookSnap.exists()) {
-                alert("Book record not found.");
-                return;
-            }
-
-            const bookData = bookSnap.val();
-            const newTotalStock = bookData.totalStock + qtyChange;
-            const newAvailableStock = bookData.availableStock + qtyChange;
-
-            if (newTotalStock < 0 || newAvailableStock < 0) {
-                alert("Error: Stock cannot drop below zero.");
-                return;
-            }
-
-            await update(bookRef, {
-                totalStock: newTotalStock,
-                availableStock: newAvailableStock
-            });
-
-            alert(`Successfully updated inventory quantity for "${bookData.title}"!`);
-            updateStockForm.reset();
-            loadAdminInventory();
-            loadDropdowns();
-        } catch (err) {
-            alert("Error updating stock quantity: " + err.message);
-        }
-    });
-}
-
-// Populate Dropdowns
+// Populate Checkout Dropdowns
 async function loadDropdowns() {
     const checkoutBookSelect = document.getElementById('checkout-book-select');
-    const updateBookSelect = document.getElementById('update-book-select');
     const memberSelect = document.getElementById('checkout-member-select');
     
     if (checkoutBookSelect) checkoutBookSelect.innerHTML = '<option value="">Select Book...</option>';
-    if (updateBookSelect) updateBookSelect.innerHTML = '<option value="">Select Book to Update...</option>';
     if (memberSelect) memberSelect.innerHTML = '<option value="">Select Character...</option>';
 
     const dbRef = ref(db);
@@ -217,9 +209,6 @@ async function loadDropdowns() {
         booksList.forEach(book => {
             if (checkoutBookSelect && book.availableStock > 0) {
                 checkoutBookSelect.innerHTML += `<option value="${book.id}" data-title="${book.title}" data-stock="${book.availableStock}">${book.title} (Available: ${book.availableStock})</option>`;
-            }
-            if (updateBookSelect) {
-                updateBookSelect.innerHTML += `<option value="${book.id}">${book.title} (Total: ${book.totalStock}, Available: ${book.availableStock})</option>`;
             }
         });
     }
@@ -255,7 +244,7 @@ if (checkoutForm) {
         const rentalDays = parseInt(document.getElementById('rental-days-input').value);
 
         if (!bookId || !memberName) {
-            alert("Please fill out all checkout fields.");
+            showToast("Please fill out all checkout fields.", 'error');
             return;
         }
 
@@ -278,14 +267,14 @@ if (checkoutForm) {
                 availableStock: currentStock - 1
             });
 
-            alert(`Successfully rented "${bookTitle}" to ${memberName}! Due in ${rentalDays} days.`);
+            showToast(`Rented "${bookTitle}" to ${memberName}!`);
             checkoutForm.reset();
             loadAdminInventory();
             loadDashboardData();
             loadAdminMembers();
             loadDropdowns();
         } catch (err) {
-            alert("Error processing checkout: " + err.message);
+            showToast("Error processing checkout: " + err.message, 'error');
         }
     });
 }
@@ -309,17 +298,17 @@ window.returnBook = async function(rentalKey, bookId) {
             });
         }
 
-        alert("Book returned successfully and stock restored!");
+        showToast("Book returned and stock restored!");
         loadDashboardData();
         loadAdminInventory();
         loadAdminMembers();
         loadDropdowns();
     } catch (err) {
-        alert("Error processing return: " + err.message);
+        showToast("Error processing return: " + err.message, 'error');
     }
 };
 
-// Load Admin Members with Active Rentals and Missed/Overdue Info
+// Load Detailed Admin Members Profile View
 async function loadAdminMembers() {
     const membersListDiv = document.getElementById('members-list');
     if (!membersListDiv) return;
@@ -336,7 +325,6 @@ async function loadAdminMembers() {
             return;
         }
 
-        // Map rentals by memberName
         let memberRentals = {};
         if (rentalsSnap.exists()) {
             rentalsSnap.forEach((childSnap) => {
@@ -360,31 +348,32 @@ async function loadAdminMembers() {
             let rentalsHtml = '';
 
             if (rentals.length > 0) {
-                rentalsHtml = '<div style="margin-top: 6px; font-size: 0.82rem; color: #bbb;"><strong>Rented Books:</strong><ul style="margin-left: 15px;">';
+                rentalsHtml = `<div style="margin-top: 8px; font-size: 0.85rem; color: #ddd;">
+                    <p style="color: #3b82f6; font-weight: bold; margin-bottom: 4px;">Active Rentals (${rentals.length}):</p>
+                    <ul style="margin-left: 18px; display: flex; flex-direction: column; gap: 4px;">`;
+                
                 rentals.forEach(r => {
                     const dueFormatted = formatMonthNameDay(r.dueDate);
                     const isOverdue = new Date() > new Date(r.dueDate);
-                    let statusColor = '#aaa';
-                    let overdueTag = '';
+                    let overdueText = '';
 
                     if (isOverdue) {
                         const diffTime = Math.abs(new Date() - new Date(r.dueDate));
                         const overdueDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-                        statusColor = '#ef4444';
-                        overdueTag = ` <span style="color: #ef4444; font-weight: bold;">(Overdue by ${overdueDays}d)</span>`;
+                        overdueText = ` <span style="color: #ef4444; font-weight: bold;">(⚠️ Overdue by ${overdueDays}d)</span>`;
                     }
-                    rentalsHtml += `<li style="color: ${statusColor};">"${r.bookTitle}" (Due: ${dueFormatted})${overdueTag}</li>`;
+                    rentalsHtml += `<li><strong>${r.bookTitle}</strong> — Due: ${dueFormatted}${overdueText}</li>`;
                 });
-                rentalsHtml += '</ul></div>';
+                rentalsHtml += `</ul></div>`;
             } else {
-                rentalsHtml = '<p style="font-size: 0.8rem; color: #777; margin-top: 4px;">No active rentals.</p>';
+                rentalsHtml = '<p style="font-size: 0.82rem; color: #777; margin-top: 4px;">No books currently checked out.</p>';
             }
 
             membersListDiv.innerHTML += `
-                <div class="rental-item" style="margin-bottom: 10px;">
+                <div class="rental-item" style="margin-bottom: 12px;">
                     <div style="display: flex; justify-content: space-between; align-items: center;">
-                        <span><strong>${member.name}</strong></span>
-                        <button class="btn-danger" style="padding: 4px 8px; font-size: 0.75rem;" onclick="deleteMember('${member.id}', '${member.name}')">Delete</button>
+                        <span style="font-size: 1rem; color: #fff;"><strong>${member.name}</strong></span>
+                        <button class="btn-danger btn-sm" onclick="deleteMember('${member.id}', '${member.name}')">Delete</button>
                     </div>
                     ${rentalsHtml}
                 </div>
@@ -395,7 +384,7 @@ async function loadAdminMembers() {
     }
 }
 
-// Load Admin Inventory View
+// Load Admin Inventory View with Direct Adjustments
 async function loadAdminInventory() {
     const inventoryList = document.getElementById('admin-inventory-list');
     if (!inventoryList) return;
@@ -413,16 +402,22 @@ async function loadAdminInventory() {
 
         let booksList = [];
         snapshot.forEach((childSnap) => {
-            booksList.push(childSnap.val());
+            booksList.push({ id: childSnap.key, ...childSnap.val() });
         });
         booksList.sort((a, b) => a.title.localeCompare(b.title));
 
         inventoryList.innerHTML = '';
         booksList.forEach(book => {
             inventoryList.innerHTML += `
-                <div class="rental-item" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
-                    <span><strong>${book.title}</strong></span>
-                    <span>Available: <strong>${book.availableStock}</strong> / Total: ${book.totalStock}</span>
+                <div class="rental-item" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
+                    <div>
+                        <p><strong>${book.title}</strong></p>
+                        <p style="font-size: 0.82rem; color: #aaa;">Available: ${book.availableStock} / Total: ${book.totalStock}</p>
+                    </div>
+                    <div style="display: flex; gap: 5px;">
+                        <button class="btn-sm" onclick="adjustStock('${book.id}', '${book.title}', ${book.totalStock}, ${book.availableStock}, -1)" title="Remove Copy">-</button>
+                        <button class="btn-sm" onclick="adjustStock('${book.id}', '${book.title}', ${book.totalStock}, ${book.availableStock}, 1)" title="Add Copy">+</button>
+                    </div>
                 </div>
             `;
         });
