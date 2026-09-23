@@ -80,7 +80,7 @@ function filterAndRenderCatalog(query) {
                     <h3>📖 ${book.title}</h3>
                 </div>
                 <div>
-                    <span class="status-badge status-available">Available for rental (${book.availableStock} / ${book.totalStock})</span>
+                    <span class="status-badge status-available">Available for rental</span>
                 </div>
             </div>
         `;
@@ -94,7 +94,7 @@ function filterAndRenderCatalog(query) {
                     <h3>📖 ${book.title}</h3>
                 </div>
                 <div>
-                    <span class="status-badge status-unavailable">All copies currently checked out (0 / ${book.totalStock})</span>
+                    <span class="status-badge status-unavailable">All copies currently checked out</span>
                 </div>
             </div>
         `;
