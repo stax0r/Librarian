@@ -14,7 +14,10 @@ body {
     min-height: 100vh;
 }
 
-main, .container, .dashboard-container, .auth-container {
+main,
+.container,
+.dashboard-container,
+.auth-container {
     flex: 1;
 }
 
@@ -39,14 +42,12 @@ main, .container, .dashboard-container, .auth-container {
     align-items: center;
 }
 
-/* Centered & Nicely Boxed Index Page */
 .container {
     max-width: 1000px;
     margin: 0 auto;
     width: 100%;
 }
 
-/* Strict 2x2 Dashboard Grid Layout */
 .dashboard-container {
     max-width: 1200px;
     margin: 0 auto;
@@ -56,7 +57,6 @@ main, .container, .dashboard-container, .auth-container {
     gap: 25px;
 }
 
-/* Centered Login Screen */
 .auth-container {
     display: flex;
     justify-content: center;
@@ -67,7 +67,8 @@ main, .container, .dashboard-container, .auth-container {
     height: auto;
 }
 
-.auth-box, .dash-card {
+.auth-box,
+.dash-card {
     background: #1e1e1e;
     border: 1px solid #333;
     padding: 25px;
@@ -75,7 +76,6 @@ main, .container, .dashboard-container, .auth-container {
     width: 100%;
 }
 
-/* Fixed size standard cards with inner scroll for the 2x2 view */
 .dash-card:not(.full-width) {
     height: 440px;
     display: flex;
@@ -100,7 +100,8 @@ main, .container, .dashboard-container, .auth-container {
     color: #aaa;
 }
 
-input, select {
+input,
+select {
     width: 100%;
     padding: 10px;
     background: #121212;
@@ -109,7 +110,12 @@ input, select {
     border-radius: 4px;
 }
 
-button, .btn-primary, .btn-secondary, .btn-danger, .btn-success, .btn-sm {
+button,
+.btn-primary,
+.btn-secondary,
+.btn-danger,
+.btn-success,
+.btn-sm {
     padding: 10px 15px;
     border: none;
     border-radius: 4px;
@@ -119,16 +125,42 @@ button, .btn-primary, .btn-secondary, .btn-danger, .btn-success, .btn-sm {
     display: inline-block;
 }
 
-.btn-primary { background: #3b82f6; color: #fff; }
-.btn-secondary { background: #4b5563; color: #fff; }
-.btn-danger { background: #ef4444; color: #fff; }
-.btn-success { background: #10b981; color: #fff; }
-.btn-sm { padding: 4px 8px; font-size: 0.8rem; background: #333; color: #fff; border: 1px solid #555; }
-.btn-sm:hover { background: #444; }
+.btn-primary {
+    background: #3b82f6;
+    color: #fff;
+}
 
-button:hover { opacity: 0.9; }
+.btn-secondary {
+    background: #4b5563;
+    color: #fff;
+}
 
-/* Public Catalog & Search Styles */
+.btn-danger {
+    background: #ef4444;
+    color: #fff;
+}
+
+.btn-success {
+    background: #10b981;
+    color: #fff;
+}
+
+.btn-sm {
+    padding: 4px 8px;
+    font-size: 0.8rem;
+    background: #333;
+    color: #fff;
+    border: 1px solid #555;
+}
+
+.btn-sm:hover {
+    background: #444;
+}
+
+button:hover {
+    opacity: 0.9;
+}
+
 .catalog-search-container {
     margin-bottom: 25px;
 }
@@ -157,8 +189,14 @@ button:hover { opacity: 0.9; }
     color: #fff;
 }
 
-.book-card.available { border-left: 4px solid #10b981; }
-.book-card.unavailable { border-left: 4px solid #f59e0b; }
+.book-card.available {
+    border-left: 4px solid #10b981;
+}
+
+.book-card.unavailable {
+    border-left: 4px solid #f59e0b;
+}
+
 .book-card.out-of-stock {
     border-left: 4px solid #4b5563;
     opacity: 0.55;
@@ -173,9 +211,20 @@ button:hover { opacity: 0.9; }
     border-radius: 4px;
 }
 
-.status-available { background: rgba(16, 185, 129, 0.15); color: #10b981; }
-.status-unavailable { background: rgba(245, 158, 11, 0.15); color: #f59e0b; }
-.status-out { background: rgba(75, 85, 99, 0.2); color: #9ca3af; }
+.status-available {
+    background: rgba(16, 185, 129, 0.15);
+    color: #10b981;
+}
+
+.status-unavailable {
+    background: rgba(245, 158, 11, 0.15);
+    color: #f59e0b;
+}
+
+.status-out {
+    background: rgba(75, 85, 99, 0.2);
+    color: #9ca3af;
+}
 
 .error-message {
     color: #ef4444;
@@ -203,7 +252,6 @@ button:hover { opacity: 0.9; }
     margin-top: 5px;
 }
 
-/* Toast Notification Styles */
 #toast-container {
     position: fixed;
     bottom: 25px;
@@ -220,7 +268,7 @@ button:hover { opacity: 0.9; }
     padding: 12px 20px;
     border-radius: 6px;
     border-left: 4px solid #3b82f6;
-    box-shadow: 0 4px 12px rgba(0,0,0,0.5);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5);
     font-size: 0.9rem;
     opacity: 0;
     transform: translateY(20px);
@@ -232,10 +280,14 @@ button:hover { opacity: 0.9; }
     transform: translateY(0);
 }
 
-.toast.success { border-left-color: #10b981; }
-.toast.error { border-left-color: #ef4444; }
+.toast.success {
+    border-left-color: #10b981;
+}
 
-/* Modal Popup Styles */
+.toast.error {
+    border-left-color: #ef4444;
+}
+
 .modal {
     display: none;
     position: fixed;
@@ -272,7 +324,6 @@ button:hover { opacity: 0.9; }
     color: #fff;
 }
 
-/* Standardized Footer Styles */
 .site-footer {
     border-top: 1px solid #333;
     margin-top: 40px;
@@ -301,7 +352,6 @@ button:hover { opacity: 0.9; }
     font-family: monospace;
 }
 
-/* Custom Themed Donation Button */
 .donation-btn {
     display: inline-flex;
     align-items: center;

@@ -18,14 +18,14 @@ async function loadPublicCatalog() {
     const catalogContainer = document.getElementById('book-catalog');
     if (!catalogContainer) return;
 
-    catalogContainer.innerHTML = '<p class="loading-text">Consulting the arcane archives...</p>';
+    catalogContainer.innerHTML = '<p class="loading-text">Consulting the library catalog...</p>';
     
     try {
         const dbRef = ref(db);
         const snapshot = await get(child(dbRef, "books"));
         
         if (!snapshot.exists()) {
-            catalogContainer.innerHTML = '<p class="loading-text">No tomes found within the archives.</p>';
+            catalogContainer.innerHTML = '<p class="loading-text">No books found within the library records.</p>';
             return;
         }
 
@@ -39,7 +39,7 @@ async function loadPublicCatalog() {
         filterAndRenderCatalog("");
 
     } catch (err) {
-        catalogContainer.innerHTML = `<p class="error-message">Error consulting archives: ${err.message}</p>`;
+        catalogContainer.innerHTML = `<p class="error-message">Error consulting library records: ${err.message}</p>`;
     }
 }
 
@@ -51,7 +51,7 @@ function filterAndRenderCatalog(query) {
     const filtered = allBooks.filter(book => book.title.toLowerCase().includes(searchTerm));
 
     if (filtered.length === 0) {
-        catalogContainer.innerHTML = '<p class="loading-text">No matching tomes discovered in the archives.</p>';
+        catalogContainer.innerHTML = '<p class="loading-text">No matching books discovered in the catalog.</p>';
         return;
     }
 
@@ -80,7 +80,7 @@ function filterAndRenderCatalog(query) {
                     <h3>📖 ${book.title}</h3>
                 </div>
                 <div>
-                    <span class="status-badge status-available">Available for rental</span>
+                    <span class="status-badge status-available">Available for loan</span>
                 </div>
             </div>
         `;
