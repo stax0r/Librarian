@@ -14,8 +14,12 @@
 
     <main class="container">
         <h2>Available Inventory</h2>
-        <p class="subtitle">Browse available books. Out-of-stock items are listed below.</p>
+        <p class="subtitle" style="margin-bottom: 20px; color: #aaa;">Browse our collection, check availability, or search for a specific tome.</p>
         
+        <div class="catalog-search-container">
+            <input type="text" id="book-search" placeholder="🔍 Search books by title..." autocomplete="off">
+        </div>
+
         <div id="book-catalog" class="catalog-grid">
             <!-- Dynamic books rendered here -->
             <p class="loading-text">Loading library records...</p>
