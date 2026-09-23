@@ -2,16 +2,6 @@ import { auth, db } from "./firebase-config.js";
 import { signOut, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
 import { ref, set, push, get, child, update, remove } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-database.js";
 
-// Set default datetime-local value to 3 days from now
-window.addEventListener('DOMContentLoaded', () => {
-    const dueInput = document.getElementById('due-date-input');
-    if (dueInput) {
-        const defaultDate = new Date();
-        defaultDate.setDate(defaultDate.getDate() + 3);
-        dueInput.value = defaultDate.toISOString().slice(0, 16);
-    }
-});
-
 onAuthStateChanged(auth, (user) => {
     if (!user) {
         window.location.href = 'login.html';
@@ -60,7 +50,6 @@ if (bookForm) {
             const dbRef = ref(db);
             const snapshot = await get(child(dbRef, "books"));
             
-            // Check for duplicate book name (case-insensitive)
             let duplicateFound = false;
             if (snapshot.exists()) {
                 snapshot.forEach((childSnap) => {
@@ -104,7 +93,6 @@ async function loadDropdowns() {
 
     const dbRef = ref(db);
 
-    // Load available books
     const booksSnap = await get(child(dbRef, "books"));
     let booksList = [];
     if (booksSnap.exists()) {
@@ -120,7 +108,6 @@ async function loadDropdowns() {
         });
     }
 
-    // Load members
     const membersSnap = await get(child(dbRef, "members"));
     let membersList = [];
     if (membersSnap.exists()) {
@@ -135,7 +122,7 @@ async function loadDropdowns() {
     }
 }
 
-// Handle Checkout Form Submission (with custom datetime & pricing)
+// Handle Checkout Form Submission (Auto Timestamp + X Days / X Amount)
 const checkoutForm = document.getElementById('checkout-form');
 if (checkoutForm) {
     checkoutForm.addEventListener('submit', async (e) => {
@@ -147,33 +134,38 @@ if (checkoutForm) {
         const bookTitle = selectedOption.getAttribute('data-title');
         const currentStock = parseInt(selectedOption.getAttribute('data-stock'));
         const memberName = document.getElementById('checkout-member-select').value;
-        const dueDate = document.getElementById('due-date-input').value;
-        const basePrice = parseFloat(document.getElementById('base-price-input').value);
-        const dailyFee = parseFloat(document.getElementById('daily-fee-input').value);
+        const rentalDays = parseInt(document.getElementById('rental-days-input').value);
+        const dailyRate = parseFloat(document.getElementById('daily-rate-input').value);
 
-        if (!bookId || !memberName || !dueDate) {
+        if (!bookId || !memberName) {
             alert("Please fill out all checkout fields.");
             return;
         }
 
         try {
-            const checkoutTime = new Date().toISOString();
+            // Lock in the precise click time
+            const checkoutDate = new Date();
+            
+            // Calculate due date based on X days chosen by librarian
+            const dueDate = new Date(checkoutDate.getTime());
+            dueDate.setDate(dueDate.getDate() + rentalDays);
+
             const newRentalRef = push(ref(db, 'rentals'));
             await set(newRentalRef, {
                 bookId,
                 bookTitle,
                 memberName,
-                checkoutDate: checkoutTime,
-                dueDate,
-                basePrice,
-                dailyFee
+                checkoutDate: checkoutDate.toISOString(),
+                dueDate: dueDate.toISOString(),
+                rentalDays,
+                dailyRate
             });
 
             await update(ref(db, `books/${bookId}`), {
                 availableStock: currentStock - 1
             });
 
-            alert(`Successfully rented "${bookTitle}" to ${memberName}!`);
+            alert(`Successfully rented "${bookTitle}" to ${memberName}! Due in ${rentalDays} days.`);
             checkoutForm.reset();
             loadAdminInventory();
             loadDashboardData();
@@ -184,29 +176,32 @@ if (checkoutForm) {
     });
 }
 
-// Calculate total cost on return and process it
-window.returnBook = async function(rentalKey, bookId, basePrice, dailyFee, dueDateString) {
+// Return Book & Calculate Total Owed (Including Extra Late Fees)
+window.returnBook = async function(rentalKey, bookId, rentalDays, dailyRate, dueDateString) {
     const dueDate = new Date(dueDateString);
     const now = new Date();
     
-    // Calculate days late (if any)
-    let extraDays = 0;
+    // Standard total for the agreed rental period (Days * Daily Rate)
+    let standardTotal = rentalDays * dailyRate;
+    let lateFee = 0;
+    let extraDaysLate = 0;
+
+    // Check if overdue and calculate added penalty fee
     if (now > dueDate) {
         const diffTime = Math.abs(now - dueDate);
-        extraDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+        extraDaysLate = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+        lateFee = extraDaysLate * dailyRate; // Extra fee added per late day
     }
 
-    const totalOwed = basePrice + (extraDays * dailyFee);
+    const totalOwed = standardTotal + lateFee;
 
-    const confirmReturn = confirm(`Return Summary:\n- Base Price: ${basePrice}\n- Late Days: ${extraDays}\n- Late Fee: ${extraDays * dailyFee}\n\nTotal Owed by Character: ${totalOwed}\n\nConfirm return and restore stock?`);
+    const confirmReturn = confirm(`Return Summary:\n- Base Rental Cost (${rentalDays} days @ ${dailyRate}/day): ${standardTotal}\n- Overdue Days: ${extraDaysLate}\n- Added Late Fee: ${lateFee}\n\nTotal Owed by Character: ${totalOwed}\n\nConfirm return and restore stock?`);
     
     if (!confirmReturn) return;
 
     try {
-        // 1. Remove rental record
         await remove(ref(db, `rentals/${rentalKey}`));
 
-        // 2. Restore book stock (+1)
         const bookSnap = await get(child(ref(db), `books/${bookId}`));
         if (bookSnap.exists()) {
             const currentStock = bookSnap.val().availableStock;
@@ -227,7 +222,7 @@ window.returnBook = async function(rentalKey, bookId, basePrice, dailyFee, dueDa
     }
 };
 
-// Load Admin Inventory View (Alphabetically sorted)
+// Load Admin Inventory View (Alphabetically Sorted)
 async function loadAdminInventory() {
     const inventoryList = document.getElementById('admin-inventory-list');
     if (!inventoryList) return;
@@ -263,7 +258,7 @@ async function loadAdminInventory() {
     }
 }
 
-// Load Rentals & Overdue Check with Return Button & Cost Calculation
+// Load Rentals & Display Live Timestamps and Return Calculation
 async function loadDashboardData() {
     const rentalsList = document.getElementById('rentals-list');
     if (!rentalsList) return;
@@ -292,12 +287,12 @@ async function loadDashboardData() {
                 <div class="rental-item ${isOverdue ? 'overdue-warning' : ''}" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
                     <div>
                         <p><strong>Book:</strong> ${rental.bookTitle} | <strong>Borrower:</strong> ${rental.memberName}</p>
-                        <p style="font-size: 0.85rem; color: #aaa;">Rented: ${checkoutFormatted} | Due: ${dueFormatted}</p>
-                        <p style="font-size: 0.85rem; color: #888;">Rates: Base ${rental.basePrice} + ${rental.dailyFee}/day</p>
-                        ${isOverdue ? '<span class="badge-warning">⚠️ OVERDUE</span>' : ''}
+                        <p style="font-size: 0.85rem; color: #aaa;">Rented at: ${checkoutFormatted} | Due: ${dueFormatted}</p>
+                        <p style="font-size: 0.85rem; color: #888;">Rate: ${rental.rentalDays} days @ ${rental.dailyRate}/day</p>
+                        ${isOverdue ? '<span class="badge-warning">⚠️ OVERDUE - Penalty Fee Active</span>' : ''}
                     </div>
                     <div>
-                        <button class="btn-success" onclick="returnBook('${key}', '${rental.bookId}', ${rental.basePrice}, ${rental.dailyFee}, '${rental.dueDate}')">Return & Calculate Owed</button>
+                        <button class="btn-success" onclick="returnBook('${key}', '${rental.bookId}', ${rental.rentalDays}, ${rental.dailyRate}, '${rental.dueDate}')">Return & Calculate Owed</button>
                     </div>
                 </div>
             `;

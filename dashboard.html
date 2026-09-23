@@ -41,7 +41,6 @@
         </section>
 
         <!-- Section 3: Rent Out Book -->
-
         <section class="dash-card">
             <h2>Checkout Book to Character</h2>
             <form id="checkout-form">
@@ -56,16 +55,12 @@
                     </select>
                 </div>
                 <div class="form-group">
-                    <label for="due-date-input">Due Date & Time:</label>
-                    <input type="datetime-local" id="due-date-input" required>
+                    <label for="rental-days-input">Due in (X Days):</label>
+                    <input type="number" id="rental-days-input" value="3" min="1" required>
                 </div>
                 <div class="form-group">
-                    <label for="base-price-input">Base Rental Fee:</label>
-                    <input type="number" id="base-price-input" value="50" min="0" required>
-                </div>
-                <div class="form-group">
-                    <label for="daily-fee-input">Daily Late/Extra Fee:</label>
-                    <input type="number" id="daily-fee-input" value="10" min="0" required>
+                    <label for="daily-rate-input">Cost per Day (X Amount):</label>
+                    <input type="number" id="daily-rate-input" value="10" min="0" required>
                 </div>
                 <button type="submit" class="btn-primary">Checkout Book</button>
             </form>
