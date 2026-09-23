@@ -4,6 +4,11 @@ import { ref, set, push, get, child, update, remove } from "https://www.gstatic.
 
 const GRACE_PERIOD_DAYS = 1;
 
+let cachedMembers = [];
+let cachedInventory = [];
+let cachedActiveRentals = {};
+let cachedHistory = {};
+
 onAuthStateChanged(auth, (user) => {
     if (!user) {
         window.location.href = 'login.html';
@@ -22,6 +27,23 @@ if (logoutBtn) {
         window.location.href = 'index.html';
     });
 }
+
+// Search Bar Event Listeners
+document.addEventListener("DOMContentLoaded", () => {
+    const memberSearchInput = document.getElementById('member-search');
+    if (memberSearchInput) {
+        memberSearchInput.addEventListener('input', (e) => {
+            renderMembersList(e.target.value);
+        });
+    }
+
+    const inventorySearchInput = document.getElementById('inventory-search');
+    if (inventorySearchInput) {
+        inventorySearchInput.addEventListener('input', (e) => {
+            renderInventoryList(e.target.value);
+        });
+    }
+});
 
 function showToast(message, type = 'success') {
     const container = document.getElementById('toast-container');
@@ -120,6 +142,22 @@ window.deleteMember = async function(memberKey, memberName) {
         loadDropdowns();
     } catch (err) {
         showToast("Error deleting member: " + err.message, 'error');
+    }
+};
+
+// Complete Book Deletion from Inventory
+window.deleteBook = async function(bookId, bookTitle) {
+    const confirmDelete = confirm(`Are you sure you want to completely remove "${bookTitle}" from the library catalog?`);
+    if (!confirmDelete) return;
+
+    try {
+        await remove(ref(db, `books/${bookId}`));
+        showToast(`"${bookTitle}" deleted from catalog.`);
+        loadAdminInventory();
+        loadDashboardData();
+        loadDropdowns();
+    } catch (err) {
+        showToast("Error deleting book: " + err.message, 'error');
     }
 };
 
@@ -230,7 +268,7 @@ async function loadDropdowns() {
     }
 }
 
-// Handle Checkout Form Submission (Records both active rental and increments lifetime rental stats archive)
+// Handle Checkout Form Submission
 const checkoutForm = document.getElementById('checkout-form');
 if (checkoutForm) {
     checkoutForm.addEventListener('submit', async (e) => {
@@ -254,7 +292,6 @@ if (checkoutForm) {
             const dueDate = new Date(checkoutDate.getTime());
             dueDate.setDate(dueDate.getDate() + rentalDays);
 
-            // 1. Push to active rentals ledger
             const newRentalRef = push(ref(db, 'rentals'));
             await set(newRentalRef, {
                 bookId,
@@ -265,7 +302,6 @@ if (checkoutForm) {
                 rentalDays
             });
 
-            // 2. Also log to a lifetime history archive node so total rentals persists even when books are returned
             const historyRef = push(ref(db, 'rentalHistory'));
             await set(historyRef, {
                 bookTitle,
@@ -320,7 +356,7 @@ window.returnBook = async function(rentalKey, bookId) {
     }
 };
 
-// Load Detailed Admin Members Profile View (Tracks Total Lifetime Rentals via 'rentalHistory')
+// Load and Cache Admin Members Profile View
 async function loadAdminMembers() {
     const membersListDiv = document.getElementById('members-list');
     if (!membersListDiv) return;
@@ -334,100 +370,110 @@ async function loadAdminMembers() {
         const historySnap = await get(child(dbRef, "rentalHistory"));
 
         if (!membersSnap.exists()) {
+            cachedMembers = [];
             membersListDiv.innerHTML = '<p>No characters registered.</p>';
             return;
         }
 
-        // Map active rentals
-        let memberActiveRentals = {};
+        cachedActiveRentals = {};
         if (rentalsSnap.exists()) {
             rentalsSnap.forEach((childSnap) => {
                 const r = childSnap.val();
-                if (!memberActiveRentals[r.memberName]) memberActiveRentals[r.memberName] = [];
-                memberActiveRentals[r.memberName].push(r);
+                if (!cachedActiveRentals[r.memberName]) cachedActiveRentals[r.memberName] = [];
+                cachedActiveRentals[r.memberName].push(r);
             });
         }
 
-        // Map lifetime total rentals & missed deadlines from history archive
-        let memberLifetimeRentals = {};
-        let memberMissedDeadlines = {};
-
+        cachedHistory = { lifetime: {}, missed: {} };
         if (historySnap.exists()) {
             historySnap.forEach((childSnap) => {
                 const h = childSnap.val();
-                memberLifetimeRentals[h.memberName] = (memberLifetimeRentals[h.memberName] || 0) + 1;
+                cachedHistory.lifetime[h.memberName] = (cachedHistory.lifetime[h.memberName] || 0) + 1;
 
-                // Check if this historical rental missed its due date (accounting for 1-day grace period)
                 const dueDate = new Date(h.dueDate);
                 const gracePeriodDeadline = new Date(dueDate.getTime());
                 gracePeriodDeadline.setDate(gracePeriodDeadline.getDate() + GRACE_PERIOD_DAYS);
 
-                // If it's already returned, we evaluate against current time or completion. 
-                // To keep it simple, any active or past record exceeding grace period counts as a missed strike.
                 if (new Date() > gracePeriodDeadline) {
-                    memberMissedDeadlines[h.memberName] = (memberMissedDeadlines[h.memberName] || 0) + 1;
+                    cachedHistory.missed[h.memberName] = (cachedHistory.missed[h.memberName] || 0) + 1;
                 }
             });
         }
 
-        let membersList = [];
+        cachedMembers = [];
         membersSnap.forEach((childSnap) => {
-            membersList.push({ id: childSnap.key, ...childSnap.val() });
+            cachedMembers.push({ id: childSnap.key, ...childSnap.val() });
         });
-        membersList.sort((a, b) => a.name.localeCompare(b.name));
+        cachedMembers.sort((a, b) => a.name.localeCompare(b.name));
 
-        membersListDiv.innerHTML = '';
-        membersList.forEach(member => {
-            const activeRentals = memberActiveRentals[member.name] || [];
-            const lifetimeCount = memberLifetimeRentals[member.name] || 0;
-            const missedCount = memberMissedDeadlines[member.name] || 0;
-
-            let rentalsHtml = '';
-            if (activeRentals.length > 0) {
-                rentalsHtml = `<div style="margin-top: 6px; font-size: 0.82rem; color: #ccc;">
-                    <p style="color: #3b82f6; font-weight: bold; margin-bottom: 2px;">Currently Rented:</p>
-                    <ul style="margin-left: 16px;">`;
-                
-                activeRentals.forEach(r => {
-                    const dueFormatted = formatMonthNameDay(r.dueDate);
-                    const dueDateObj = new Date(r.dueDate);
-                    const graceDate = new Date(dueDateObj.getTime());
-                    graceDate.setDate(graceDate.getDate() + GRACE_PERIOD_DAYS);
-                    
-                    const isOverdue = new Date() > graceDate;
-                    let overdueText = '';
-
-                    if (isOverdue) {
-                        const diffTime = Math.abs(new Date() - dueDateObj);
-                        const overdueDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-                        overdueText = ` <span style="color: #ef4444; font-weight: bold;">(⚠️ Overdue by ${overdueDays}d)</span>`;
-                    }
-                    rentalsHtml += `<li>"${r.bookTitle}" (Due: ${dueFormatted})${overdueText}</li>`;
-                });
-                rentalsHtml += `</ul></div>`;
-            } else {
-                rentalsHtml = '<p style="font-size: 0.8rem; color: #777; margin-top: 4px;">No active books checked out.</p>';
-            }
-
-            membersListDiv.innerHTML += `
-                <div class="rental-item" style="margin-bottom: 12px;">
-                    <div style="display: flex; justify-content: space-between; align-items: center;">
-                        <span style="font-size: 1rem; color: #fff;"><strong>${member.name}</strong></span>
-                        <button class="btn-danger btn-sm" onclick="deleteMember('${member.id}', '${member.name}')">Delete</button>
-                    </div>
-                    <p style="font-size: 0.82rem; color: #aaa; margin-top: 4px;">
-                        📚 Total Rented: <strong style="color: #fff;">${lifetimeCount}</strong> | ❌ Missed Due Dates: <strong style="color: ${missedCount > 0 ? '#ef4444' : '#fff'};">${missedCount}</strong>
-                    </p>
-                    ${rentalsHtml}
-                </div>
-            `;
-        });
+        const searchVal = document.getElementById('member-search')?.value || '';
+        renderMembersList(searchVal);
     } catch (err) {
         membersListDiv.innerHTML = `<p class="error-message">Error loading members: ${err.message}</p>`;
     }
 }
 
-// Load Admin Inventory View
+function renderMembersList(query) {
+    const membersListDiv = document.getElementById('members-list');
+    if (!membersListDiv) return;
+
+    const searchTerm = query.toLowerCase().trim();
+    const filtered = cachedMembers.filter(m => m.name.toLowerCase().includes(searchTerm));
+
+    if (filtered.length === 0) {
+        membersListDiv.innerHTML = '<p>No matching characters found.</p>';
+        return;
+    }
+
+    membersListDiv.innerHTML = '';
+    filtered.forEach(member => {
+        const activeRentals = cachedActiveRentals[member.name] || [];
+        const lifetimeCount = cachedHistory.lifetime?.[member.name] || 0;
+        const missedCount = cachedHistory.missed?.[member.name] || 0;
+
+        let rentalsHtml = '';
+        if (activeRentals.length > 0) {
+            rentalsHtml = `<div style="margin-top: 6px; font-size: 0.82rem; color: #ccc;">
+                <p style="color: #3b82f6; font-weight: bold; margin-bottom: 2px;">Currently Rented:</p>
+                <ul style="margin-left: 16px;">`;
+            
+            activeRentals.forEach(r => {
+                const dueFormatted = formatMonthNameDay(r.dueDate);
+                const dueDateObj = new Date(r.dueDate);
+                const graceDate = new Date(dueDateObj.getTime());
+                graceDate.setDate(graceDate.getDate() + GRACE_PERIOD_DAYS);
+                
+                const isOverdue = new Date() > graceDate;
+                let overdueText = '';
+
+                if (isOverdue) {
+                    const diffTime = Math.abs(new Date() - dueDateObj);
+                    const overdueDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+                    overdueText = ` <span style="color: #ef4444; font-weight: bold;">(⚠️ Overdue by ${overdueDays}d)</span>`;
+                }
+                rentalsHtml += `<li>"${r.bookTitle}" (Due: ${dueFormatted})${overdueText}</li>`;
+            });
+            rentalsHtml += `</ul></div>`;
+        } else {
+            rentalsHtml = '<p style="font-size: 0.8rem; color: #777; margin-top: 4px;">No active books checked out.</p>';
+        }
+
+        membersListDiv.innerHTML += `
+            <div class="rental-item" style="margin-bottom: 12px;">
+                <div style="display: flex; justify-content: space-between; align-items: center;">
+                    <span style="font-size: 1rem; color: #fff;"><strong>${member.name}</strong></span>
+                    <button class="btn-danger btn-sm" onclick="deleteMember('${member.id}', '${member.name}')">Delete</button>
+                </div>
+                <p style="font-size: 0.82rem; color: #aaa; margin-top: 4px;">
+                    📚 Total Rented: <strong style="color: #fff;">${lifetimeCount}</strong> | ❌ Missed Due Dates: <strong style="color: ${missedCount > 0 ? '#ef4444' : '#fff'};">${missedCount}</strong>
+                </p>
+                ${rentalsHtml}
+            </div>
+        `;
+    });
+}
+
+// Load and Cache Admin Inventory View
 async function loadAdminInventory() {
     const inventoryList = document.getElementById('admin-inventory-list');
     if (!inventoryList) return;
@@ -439,34 +485,52 @@ async function loadAdminInventory() {
         const snapshot = await get(child(dbRef, "books"));
 
         if (!snapshot.exists()) {
+            cachedInventory = [];
             inventoryList.innerHTML = '<p>No books currently in stock.</p>';
             return;
         }
 
-        let booksList = [];
+        cachedInventory = [];
         snapshot.forEach((childSnap) => {
-            booksList.push({ id: childSnap.key, ...childSnap.val() });
+            cachedInventory.push({ id: childSnap.key, ...childSnap.val() });
         });
-        booksList.sort((a, b) => a.title.localeCompare(b.title));
+        cachedInventory.sort((a, b) => a.title.localeCompare(b.title));
 
-        inventoryList.innerHTML = '';
-        booksList.forEach(book => {
-            inventoryList.innerHTML += `
-                <div class="rental-item" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
-                    <div>
-                        <p><strong>${book.title}</strong></p>
-                        <p style="font-size: 0.82rem; color: #aaa;">Available: ${book.availableStock} / Total: ${book.totalStock}</p>
-                    </div>
-                    <div style="display: flex; gap: 5px;">
-                        <button class="btn-sm" onclick="adjustStock('${book.id}', '${book.title}', ${book.totalStock}, ${book.availableStock}, -1)" title="Remove Copy">-</button>
-                        <button class="btn-sm" onclick="adjustStock('${book.id}', '${book.title}', ${book.totalStock}, ${book.availableStock}, 1)" title="Add Copy">+</button>
-                    </div>
-                </div>
-            `;
-        });
+        const searchVal = document.getElementById('inventory-search')?.value || '';
+        renderInventoryList(searchVal);
     } catch (err) {
         inventoryList.innerHTML = `<p class="error-message">Error loading inventory: ${err.message}</p>`;
     }
+}
+
+function renderInventoryList(query) {
+    const inventoryList = document.getElementById('admin-inventory-list');
+    if (!inventoryList) return;
+
+    const searchTerm = query.toLowerCase().trim();
+    const filtered = cachedInventory.filter(b => b.title.toLowerCase().includes(searchTerm));
+
+    if (filtered.length === 0) {
+        inventoryList.innerHTML = '<p>No matching inventory items found.</p>';
+        return;
+    }
+
+    inventoryList.innerHTML = '';
+    filtered.forEach(book => {
+        inventoryList.innerHTML += `
+            <div class="rental-item" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
+                <div>
+                    <p><strong>${book.title}</strong></p>
+                    <p style="font-size: 0.82rem; color: #aaa;">Available: ${book.availableStock} / Total: ${book.totalStock}</p>
+                </div>
+                <div style="display: flex; gap: 5px; align-items: center;">
+                    <button class="btn-sm" onclick="adjustStock('${book.id}', '${book.title}', ${book.totalStock}, ${book.availableStock}, -1)" title="Remove Copy">-</button>
+                    <button class="btn-sm" onclick="adjustStock('${book.id}', '${book.title}', ${book.totalStock}, ${book.availableStock}, 1)" title="Add Copy">+</button>
+                    <button class="btn-danger btn-sm" onclick="deleteBook('${book.id}', '${book.title}')" title="Delete Book">🗑️</button>
+                </div>
+            </div>
+        `;
+    });
 }
 
 // Load Rentals Ledger

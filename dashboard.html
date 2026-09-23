@@ -20,6 +20,9 @@
         <!-- Section 1: Registered Members -->
         <section class="dash-card">
             <h2>Registered Members</h2>
+            <div style="margin-top: 10px; margin-bottom: 5px;">
+                <input type="text" id="member-search" placeholder="🔍 Search members..." autocomplete="off">
+            </div>
             <div id="members-list" class="card-scroll-area">
                 <p class="loading-text">Loading members...</p>
             </div>
@@ -28,6 +31,9 @@
         <!-- Section 2: Live Inventory Stock -->
         <section class="dash-card">
             <h2>Live Inventory Stock</h2>
+            <div style="margin-top: 10px; margin-bottom: 5px;">
+                <input type="text" id="inventory-search" placeholder="🔍 Search inventory..." autocomplete="off">
+            </div>
             <div id="admin-inventory-list" class="card-scroll-area">
                 <p class="loading-text">Loading inventory...</p>
             </div>
@@ -55,7 +61,7 @@
             </form>
         </section>
 
-        <!-- Section 4: Active Rentals & Returns Ledger (Now standard card size) -->
+        <!-- Section 4: Active Rentals & Returns Ledger -->
         <section class="dash-card">
             <h2>Active Rentals & Returns Ledger</h2>
             <div id="rentals-list" class="card-scroll-area">
