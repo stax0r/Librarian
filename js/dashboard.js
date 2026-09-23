@@ -62,13 +62,12 @@ if (memberForm) {
     });
 }
 
-// Add Completely New Book to Catalog
+// Add New Book to Catalog (Starts with 0 stock until updated via inventory)
 const catalogBookForm = document.getElementById('add-catalog-book-form');
 if (catalogBookForm) {
     catalogBookForm.addEventListener('submit', async (e) => {
         e.preventDefault();
         const titleInput = document.getElementById('new-catalog-title').value.trim();
-        const totalStock = parseInt(document.getElementById('new-catalog-stock').value);
 
         try {
             const dbRef = ref(db);
@@ -92,12 +91,11 @@ if (catalogBookForm) {
             const newBookRef = push(ref(db, 'books'));
             await set(newBookRef, {
                 title: titleInput,
-                totalStock,
-                availableStock: totalStock
+                totalStock: 0,
+                availableStock: 0
             });
-            alert("New book added to catalog successfully!");
+            alert("New book added to catalog! Use the inventory tool to add copies.");
             document.getElementById('new-catalog-title').value = '';
-            document.getElementById('new-catalog-stock').value = '1';
             loadAdminInventory();
             loadDropdowns();
         } catch (err) {
@@ -153,7 +151,7 @@ if (updateStockForm) {
     });
 }
 
-// Populate All Dropdowns (Checkout & Stock Update, Alphabetically Sorted)
+// Populate All Dropdowns (Alphabetically Sorted)
 async function loadDropdowns() {
     const checkoutBookSelect = document.getElementById('checkout-book-select');
     const updateBookSelect = document.getElementById('update-book-select');

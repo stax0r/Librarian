@@ -8,7 +8,7 @@ body {
     font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
     background: #121212;
     color: #e0e0e0;
-    padding: 20px;
+    padding: 30px;
 }
 
 .site-header {
@@ -18,11 +18,23 @@ body {
     border-bottom: 1px solid #333;
     padding-bottom: 15px;
     margin-bottom: 30px;
+    max-width: 1400px;
+    margin-left: auto;
+    margin-right: auto;
 }
 
-.container, .dashboard-container, .auth-container {
+.container, .auth-container {
     max-width: 800px;
     margin: 0 auto;
+}
+
+/* Widescreen Multi-Column Grid Layout for Dashboard */
+.dashboard-container {
+    max-width: 1400px;
+    margin: 0 auto;
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(350px, 1fr));
+    gap: 20px;
 }
 
 .auth-container {
@@ -37,11 +49,10 @@ body {
     border: 1px solid #333;
     padding: 25px;
     border-radius: 8px;
-    margin-bottom: 20px;
 }
 
 .full-width {
-    width: 100%;
+    grid-column: 1 / -1;
 }
 
 .form-group {
@@ -52,9 +63,10 @@ body {
     display: block;
     margin-bottom: 5px;
     font-size: 0.9rem;
+    color: #aaa;
 }
 
-input {
+input, select {
     width: 100%;
     padding: 10px;
     background: #121212;
@@ -63,7 +75,7 @@ input {
     border-radius: 4px;
 }
 
-button, .btn-primary, .btn-secondary, .btn-danger {
+button, .btn-primary, .btn-secondary, .btn-danger, .btn-success {
     padding: 10px 15px;
     border: none;
     border-radius: 4px;
@@ -76,11 +88,13 @@ button, .btn-primary, .btn-secondary, .btn-danger {
 .btn-primary { background: #3b82f6; color: #fff; }
 .btn-secondary { background: #4b5563; color: #fff; }
 .btn-danger { background: #ef4444; color: #fff; }
+.btn-success { background: #10b981; color: #fff; }
 
 button:hover { opacity: 0.9; }
 
 .catalog-grid {
     display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
     gap: 15px;
 }
 
@@ -105,8 +119,7 @@ button:hover { opacity: 0.9; }
 
 .rental-item {
     background: #2a2a2a;
-    padding: 10px;
-    margin-bottom: 10px;
+    padding: 12px;
     border-radius: 4px;
     border-left: 4px solid #3b82f6;
 }
@@ -122,6 +135,3 @@ button:hover { opacity: 0.9; }
     display: inline-block;
     margin-top: 5px;
 }
-
-.btn-success { background: #10b981; color: #fff; padding: 6px 12px; border: none; border-radius: 4px; cursor: pointer; font-weight: bold; }
-.btn-success:hover { opacity: 0.9; }
