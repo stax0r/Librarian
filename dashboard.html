@@ -1,11 +1,13 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Library Management</title>
     <link rel="stylesheet" href="css/style.css">
 </head>
+
 <body>
     <header class="site-header">
         <h1>⚙️ Library Management</h1>
@@ -37,13 +39,23 @@
                 <button type="submit" class="btn-primary">Add to Inventory</button>
             </form>
         </section>
-
-        <!-- Section 3: Admin Inventory View -->
-        <section class="dash-card full-width">
-            <h2>Live Inventory Stock</h2>
-            <div id="admin-inventory-list">
-                <p class="loading-text">Loading inventory...</p>
-            </div>
+        
+        <!-- Section 3: Rent Out Book -->
+        <section class="dash-card">
+            <h2>Checkout Book to Character</h2>
+            <form id="checkout-form">
+                <div class="form-group">
+                    <select id="checkout-book-select" required>
+                        <option value="">Select Book...</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <select id="checkout-member-select" required>
+                        <option value="">Select Character...</option>
+                    </select>
+                </div>
+                <button type="submit" class="btn-primary">Checkout Book</button>
+            </form>
         </section>
 
         <!-- Section 4: Active Rentals & Overdue Tracker -->
@@ -57,4 +69,5 @@
 
     <script type="module" src="js/dashboard.js"></script>
 </body>
+
 </html>

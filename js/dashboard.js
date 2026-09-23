@@ -1,6 +1,6 @@
 import { auth, db } from "./firebase-config.js";
 import { signOut, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
-import { ref, set, push, get, child } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-database.js";
+import { ref, set, push, get, child, update } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-database.js";
 
 const OVERDUE_LIMIT_DAYS = 7;
 
@@ -17,6 +17,7 @@ onAuthStateChanged(auth, (user) => {
     } else {
         loadDashboardData();
         loadAdminInventory();
+        loadDropdowns();
     }
 });
 
@@ -39,6 +40,7 @@ if (memberForm) {
             await set(newMemberRef, { name });
             alert("Character registered successfully!");
             document.getElementById('member-name').value = '';
+            loadDropdowns();
         } catch (err) {
             alert("Error adding member: " + err.message);
         }
@@ -62,9 +64,86 @@ if (bookForm) {
             alert("Book added to inventory!");
             document.getElementById('book-title').value = '';
             document.getElementById('book-stock').value = '1';
-            loadAdminInventory(); // Refresh list immediately
+            loadAdminInventory();
+            loadDropdowns();
         } catch (err) {
             alert("Error adding book: " + err.message);
+        }
+    });
+}
+
+// Populate Checkout Dropdowns
+async function loadDropdowns() {
+    const bookSelect = document.getElementById('checkout-book-select');
+    const memberSelect = document.getElementById('checkout-member-select');
+    if (!bookSelect || !memberSelect) return;
+
+    bookSelect.innerHTML = '<option value="">Select Book...</option>';
+    memberSelect.innerHTML = '<option value="">Select Character...</option>';
+
+    const dbRef = ref(db);
+
+    // Load available books with stock > 0
+    const booksSnap = await get(child(dbRef, "books"));
+    if (booksSnap.exists()) {
+        booksSnap.forEach((childSnap) => {
+            const book = childSnap.val();
+            if (book.availableStock > 0) {
+                bookSelect.innerHTML += `<option value="${childSnap.key}" data-title="${book.title}" data-stock="${book.availableStock}">${book.title} (Available: ${book.availableStock})</option>`;
+            }
+        });
+    }
+
+    // Load members
+    const membersSnap = await get(child(dbRef, "members"));
+    if (membersSnap.exists()) {
+        membersSnap.forEach((childSnap) => {
+            const member = childSnap.val();
+            memberSelect.innerHTML += `<option value="${member.name}">${member.name}</option>`;
+        });
+    }
+}
+
+// Handle Checkout Form Submission
+const checkoutForm = document.getElementById('checkout-form');
+if (checkoutForm) {
+    checkoutForm.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const bookSelect = document.getElementById('checkout-book-select');
+        const selectedOption = bookSelect.options[bookSelect.selectedIndex];
+        
+        const bookId = bookSelect.value;
+        const bookTitle = selectedOption.getAttribute('data-title');
+        const currentStock = parseInt(selectedOption.getAttribute('data-stock'));
+        const memberName = document.getElementById('checkout-member-select').value;
+
+        if (!bookId || !memberName) {
+            alert("Please select both a book and a character.");
+            return;
+        }
+
+        try {
+            // 1. Create rental record with today's date
+            const newRentalRef = push(ref(db, 'rentals'));
+            await set(newRentalRef, {
+                bookId,
+                bookTitle,
+                memberName,
+                checkoutDate: new Date().toISOString()
+            });
+
+            // 2. Decrement available stock on the book
+            await update(ref(db, `books/${bookId}`), {
+                availableStock: currentStock - 1
+            });
+
+            alert(`Successfully rented "${bookTitle}" to ${memberName}!`);
+            checkoutForm.reset();
+            loadAdminInventory();
+            loadDashboardData();
+            loadDropdowns();
+        } catch (err) {
+            alert("Error processing checkout: " + err.message);
         }
     });
 }
