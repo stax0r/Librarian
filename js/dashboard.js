@@ -26,15 +26,34 @@ function formatMonthNameDay(dateString) {
     return d.toLocaleDateString('en-US', { month: 'long', day: 'numeric' });
 }
 
-// Register Member
+// Register Member with Unique Name Check
 const memberForm = document.getElementById('add-member-form');
 if (memberForm) {
     memberForm.addEventListener('submit', async (e) => {
         e.preventDefault();
-        const name = document.getElementById('member-name').value.trim();
+        const nameInput = document.getElementById('member-name').value.trim();
+
         try {
+            const dbRef = ref(db);
+            const snapshot = await get(child(dbRef, "members"));
+            
+            let duplicateFound = false;
+            if (snapshot.exists()) {
+                snapshot.forEach((childSnap) => {
+                    const existingMember = childSnap.val();
+                    if (existingMember.name.toLowerCase() === nameInput.toLowerCase()) {
+                        duplicateFound = true;
+                    }
+                });
+            }
+
+            if (duplicateFound) {
+                alert(`Error: A character named "${nameInput}" is already registered! Character names must be unique.`);
+                return;
+            }
+
             const newMemberRef = push(ref(db, 'members'));
-            await set(newMemberRef, { name });
+            await set(newMemberRef, { name: nameInput });
             alert("Character registered successfully!");
             document.getElementById('member-name').value = '';
             loadDropdowns();
@@ -44,7 +63,7 @@ if (memberForm) {
     });
 }
 
-// Add Book with Duplicate Name Check
+// Add Book to Catalog / Inventory with Duplicate Name Check
 const bookForm = document.getElementById('add-book-form');
 if (bookForm) {
     bookForm.addEventListener('submit', async (e) => {
@@ -67,7 +86,7 @@ if (bookForm) {
             }
 
             if (duplicateFound) {
-                alert(`Error: A book with the title "${titleInput}" already exists in the inventory!`);
+                alert(`Error: A book with the title "${titleInput}" already exists in the catalog!`);
                 return;
             }
 
@@ -77,7 +96,7 @@ if (bookForm) {
                 totalStock,
                 availableStock: totalStock
             });
-            alert("Book added to inventory!");
+            alert("Book added to catalog and inventory!");
             document.getElementById('book-title').value = '';
             document.getElementById('book-stock').value = '1';
             loadAdminInventory();
@@ -128,7 +147,7 @@ async function loadDropdowns() {
     }
 }
 
-// Handle Checkout Form Submission (Dates Only)
+// Handle Checkout Form Submission
 const checkoutForm = document.getElementById('checkout-form');
 if (checkoutForm) {
     checkoutForm.addEventListener('submit', async (e) => {
@@ -241,7 +260,7 @@ async function loadAdminInventory() {
     }
 }
 
-// Load Rentals with MMMM / DD Format and Overdue Day Counts
+// Load Rentals Ledger
 async function loadDashboardData() {
     const rentalsList = document.getElementById('rentals-list');
     if (!rentalsList) return;
