@@ -20,6 +20,12 @@ if (logoutBtn) {
     });
 }
 
+// Helper function to format date as Month/Day (e.g., "9/23")
+function formatMonthDay(dateString) {
+    const d = new Date(dateString);
+    return `${d.getMonth() + 1}/${d.getDate()}`;
+}
+
 // Register Member
 const memberForm = document.getElementById('add-member-form');
 if (memberForm) {
@@ -122,7 +128,7 @@ async function loadDropdowns() {
     }
 }
 
-// Handle Checkout Form Submission (Auto Timestamp + X Days / X Amount)
+// Handle Checkout Form Submission
 const checkoutForm = document.getElementById('checkout-form');
 if (checkoutForm) {
     checkoutForm.addEventListener('submit', async (e) => {
@@ -143,10 +149,7 @@ if (checkoutForm) {
         }
 
         try {
-            // Lock in the precise click time
             const checkoutDate = new Date();
-            
-            // Calculate due date based on X days chosen by librarian
             const dueDate = new Date(checkoutDate.getTime());
             dueDate.setDate(dueDate.getDate() + rentalDays);
 
@@ -176,21 +179,19 @@ if (checkoutForm) {
     });
 }
 
-// Return Book & Calculate Total Owed (Including Extra Late Fees)
+// Return Book & Calculate Total Owed
 window.returnBook = async function(rentalKey, bookId, rentalDays, dailyRate, dueDateString) {
     const dueDate = new Date(dueDateString);
     const now = new Date();
     
-    // Standard total for the agreed rental period (Days * Daily Rate)
     let standardTotal = rentalDays * dailyRate;
     let lateFee = 0;
     let extraDaysLate = 0;
 
-    // Check if overdue and calculate added penalty fee
     if (now > dueDate) {
         const diffTime = Math.abs(now - dueDate);
         extraDaysLate = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-        lateFee = extraDaysLate * dailyRate; // Extra fee added per late day
+        lateFee = extraDaysLate * dailyRate;
     }
 
     const totalOwed = standardTotal + lateFee;
@@ -258,7 +259,7 @@ async function loadAdminInventory() {
     }
 }
 
-// Load Rentals & Display Live Timestamps and Return Calculation
+// Load Rentals with Clean Month/Day Format and Specific Overdue Day Counts
 async function loadDashboardData() {
     const rentalsList = document.getElementById('rentals-list');
     if (!rentalsList) return;
@@ -279,9 +280,19 @@ async function loadDashboardData() {
             const key = childSnap.key;
             const rental = childSnap.val();
             
-            const checkoutFormatted = new Date(rental.checkoutDate).toLocaleString();
-            const dueFormatted = new Date(rental.dueDate).toLocaleString();
-            const isOverdue = new Date() > new Date(rental.dueDate);
+            const checkoutFormatted = formatMonthDay(rental.checkoutDate);
+            const dueFormatted = formatMonthDay(rental.dueDate);
+            
+            const dueDateObj = new Date(rental.dueDate);
+            const now = new Date();
+            const isOverdue = now > dueDateObj;
+
+            let overdueText = '';
+            if (isOverdue) {
+                const diffTime = Math.abs(now - dueDateObj);
+                const overdueDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+                overdueText = `<span class="badge-warning">⚠️ OVERDUE by ${overdueDays} day(s)</span>`;
+            }
             
             rentalsList.innerHTML += `
                 <div class="rental-item ${isOverdue ? 'overdue-warning' : ''}" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
@@ -289,7 +300,7 @@ async function loadDashboardData() {
                         <p><strong>Book:</strong> ${rental.bookTitle} | <strong>Borrower:</strong> ${rental.memberName}</p>
                         <p style="font-size: 0.85rem; color: #aaa;">Rented at: ${checkoutFormatted} | Due: ${dueFormatted}</p>
                         <p style="font-size: 0.85rem; color: #888;">Rate: ${rental.rentalDays} days @ ${rental.dailyRate}/day</p>
-                        ${isOverdue ? '<span class="badge-warning">⚠️ OVERDUE - Penalty Fee Active</span>' : ''}
+                        ${overdueText}
                     </div>
                     <div>
                         <button class="btn-success" onclick="returnBook('${key}', '${rental.bookId}', ${rental.rentalDays}, ${rental.dailyRate}, '${rental.dueDate}')">Return & Calculate Owed</button>
