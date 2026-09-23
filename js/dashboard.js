@@ -6,17 +6,14 @@ const GRACE_PERIOD_DAYS = 1;
 
 let cachedMembers = [];
 let cachedInventory = [];
-let cachedActiveRentals = {};
+let cachedRentals = [];
 let cachedHistory = {};
 
 onAuthStateChanged(auth, (user) => {
     if (!user) {
         window.location.href = 'login.html';
     } else {
-        loadDashboardData();
-        loadAdminInventory();
-        loadAdminMembers();
-        loadDropdowns();
+        fetchAllDataAndRender();
     }
 });
 
@@ -28,20 +25,16 @@ if (logoutBtn) {
     });
 }
 
-// Search Bar Event Listeners
+// Instant filter event listeners
 document.addEventListener("DOMContentLoaded", () => {
     const memberSearchInput = document.getElementById('member-search');
     if (memberSearchInput) {
-        memberSearchInput.addEventListener('input', (e) => {
-            renderMembersList(e.target.value);
-        });
+        memberSearchInput.addEventListener('input', (e) => renderMembersList(e.target.value));
     }
 
     const inventorySearchInput = document.getElementById('inventory-search');
     if (inventorySearchInput) {
-        inventorySearchInput.addEventListener('input', (e) => {
-            renderInventoryList(e.target.value);
-        });
+        inventorySearchInput.addEventListener('input', (e) => renderInventoryList(e.target.value));
     }
 });
 
@@ -55,7 +48,6 @@ function showToast(message, type = 'success') {
     container.appendChild(toast);
 
     setTimeout(() => toast.classList.add('show'), 50);
-
     setTimeout(() => {
         toast.classList.remove('show');
         setTimeout(() => toast.remove(), 300);
@@ -66,13 +58,8 @@ function showToast(message, type = 'success') {
 const memberModal = document.getElementById('member-modal');
 const bookModal = document.getElementById('book-modal');
 
-document.getElementById('open-member-modal-btn').addEventListener('click', () => {
-    memberModal.style.display = 'flex';
-});
-
-document.getElementById('open-book-modal-btn').addEventListener('click', () => {
-    bookModal.style.display = 'flex';
-});
+document.getElementById('open-member-modal-btn').addEventListener('click', () => memberModal.style.display = 'flex');
+document.getElementById('open-book-modal-btn').addEventListener('click', () => bookModal.style.display = 'flex');
 
 document.querySelectorAll('.close-modal').forEach(btn => {
     btn.addEventListener('click', () => {
@@ -91,6 +78,54 @@ function formatMonthNameDay(dateString) {
     return d.toLocaleDateString('en-US', { month: 'long', day: 'numeric' });
 }
 
+// Single Unified Data Fetcher (Eliminates lag and repetitive loading states)
+async function fetchAllDataAndRender() {
+    try {
+        const dbRef = ref(db);
+        const snapshot = await get(dbRef);
+        
+        const rootData = snapshot.val() || {};
+        
+        // 1. Process Members
+        const membersObj = rootData.members || {};
+        cachedMembers = Object.keys(membersObj).map(key => ({ id: key, ...membersObj[key] }));
+        cachedMembers.sort((a, b) => a.name.localeCompare(b.name));
+
+        // 2. Process Inventory Books
+        const booksObj = rootData.books || {};
+        cachedInventory = Object.keys(booksObj).map(key => ({ id: key, ...booksObj[key] }));
+        cachedInventory.sort((a, b) => a.title.localeCompare(b.title));
+
+        // 3. Process Active Rentals
+        const rentalsObj = rootData.rentals || {};
+        cachedRentals = Object.keys(rentalsObj).map(key => ({ id: key, ...rentalsObj[key] }));
+
+        // 4. Process Rental History (Lifetime & Missed metrics)
+        const historyObj = rootData.rentalHistory || {};
+        cachedHistory = { lifetime: {}, missed: {} };
+        Object.values(historyObj).forEach(h => {
+            cachedHistory.lifetime[h.memberName] = (cachedHistory.lifetime[h.memberName] || 0) + 1;
+
+            const dueDate = new Date(h.dueDate);
+            const gracePeriodDeadline = new Date(dueDate.getTime());
+            gracePeriodDeadline.setDate(gracePeriodDeadline.getDate() + GRACE_PERIOD_DAYS);
+
+            if (new Date() > gracePeriodDeadline) {
+                cachedHistory.missed[h.memberName] = (cachedHistory.missed[h.memberName] || 0) + 1;
+            }
+        });
+
+        // Render everything instantly from memory
+        renderMembersList(document.getElementById('member-search')?.value || '');
+        renderInventoryList(document.getElementById('inventory-search')?.value || '');
+        renderRentalsLedger();
+        renderCheckoutDropdowns();
+
+    } catch (err) {
+        showToast("Error loading dashboard data: " + err.message, 'error');
+    }
+}
+
 // Register Unique Member
 const memberForm = document.getElementById('add-member-form');
 if (memberForm) {
@@ -98,113 +133,72 @@ if (memberForm) {
         e.preventDefault();
         const nameInput = document.getElementById('member-name').value.trim();
 
+        const duplicate = cachedMembers.some(m => m.name.toLowerCase() === nameInput.toLowerCase());
+        if (duplicate) {
+            showToast(`Character "${nameInput}" is already registered!`, 'error');
+            return;
+        }
+
         try {
-            const dbRef = ref(db);
-            const snapshot = await get(child(dbRef, "members"));
-            
-            let duplicateFound = false;
-            if (snapshot.exists()) {
-                snapshot.forEach((childSnap) => {
-                    const existingMember = childSnap.val();
-                    if (existingMember.name.toLowerCase() === nameInput.toLowerCase()) {
-                        duplicateFound = true;
-                    }
-                });
-            }
-
-            if (duplicateFound) {
-                showToast(`Character "${nameInput}" is already registered!`, 'error');
-                return;
-            }
-
             const newMemberRef = push(ref(db, 'members'));
             await set(newMemberRef, { name: nameInput });
             showToast(`Character "${nameInput}" registered successfully!`);
             document.getElementById('member-name').value = '';
             memberModal.style.display = 'none';
-            loadAdminMembers();
-            loadDropdowns();
+            fetchAllDataAndRender();
         } catch (err) {
             showToast("Error adding member: " + err.message, 'error');
         }
     });
 }
 
-// Delete Member with Confirmation
 window.deleteMember = async function(memberKey, memberName) {
-    const confirmDelete = confirm(`Are you sure you want to delete character "${memberName}"? This action cannot be undone.`);
-    if (!confirmDelete) return;
-
+    if (!confirm(`Delete character "${memberName}"?`)) return;
     try {
         await remove(ref(db, `members/${memberKey}`));
-        showToast(`Character "${memberName}" deleted successfully.`);
-        loadAdminMembers();
-        loadDropdowns();
+        showToast(`Character "${memberName}" deleted.`);
+        fetchAllDataAndRender();
     } catch (err) {
-        showToast("Error deleting member: " + err.message, 'error');
+        showToast("Error: " + err.message, 'error');
     }
 };
 
-// Complete Book Deletion from Inventory
 window.deleteBook = async function(bookId, bookTitle) {
-    const confirmDelete = confirm(`Are you sure you want to completely remove "${bookTitle}" from the library catalog?`);
-    if (!confirmDelete) return;
-
+    if (!confirm(`Completely remove "${bookTitle}" from catalog?`)) return;
     try {
         await remove(ref(db, `books/${bookId}`));
-        showToast(`"${bookTitle}" deleted from catalog.`);
-        loadAdminInventory();
-        loadDashboardData();
-        loadDropdowns();
+        showToast(`"${bookTitle}" deleted.`);
+        fetchAllDataAndRender();
     } catch (err) {
-        showToast("Error deleting book: " + err.message, 'error');
+        showToast("Error: " + err.message, 'error');
     }
 };
 
-// Add New Book to Catalog
 const catalogBookForm = document.getElementById('add-catalog-book-form');
 if (catalogBookForm) {
     catalogBookForm.addEventListener('submit', async (e) => {
         e.preventDefault();
         const titleInput = document.getElementById('new-catalog-title').value.trim();
 
+        const duplicate = cachedInventory.some(b => b.title.toLowerCase() === titleInput.toLowerCase());
+        if (duplicate) {
+            showToast(`Book "${titleInput}" already exists!`, 'error');
+            return;
+        }
+
         try {
-            const dbRef = ref(db);
-            const snapshot = await get(child(dbRef, "books"));
-            
-            let duplicateFound = false;
-            if (snapshot.exists()) {
-                snapshot.forEach((childSnap) => {
-                    const existingBook = childSnap.val();
-                    if (existingBook.title.toLowerCase() === titleInput.toLowerCase()) {
-                        duplicateFound = true;
-                    }
-                });
-            }
-
-            if (duplicateFound) {
-                showToast(`Book "${titleInput}" already exists in the catalog!`, 'error');
-                return;
-            }
-
             const newBookRef = push(ref(db, 'books'));
-            await set(newBookRef, {
-                title: titleInput,
-                totalStock: 0,
-                availableStock: 0
-            });
+            await set(newBookRef, { title: titleInput, totalStock: 0, availableStock: 0 });
             showToast(`"${titleInput}" added to catalog!`);
             document.getElementById('new-catalog-title').value = '';
             bookModal.style.display = 'none';
-            loadAdminInventory();
-            loadDropdowns();
+            fetchAllDataAndRender();
         } catch (err) {
-            showToast("Error adding book to catalog: " + err.message, 'error');
+            showToast("Error: " + err.message, 'error');
         }
     });
 }
 
-// Direct Stock Adjustment from Inventory Card
 window.adjustStock = async function(bookId, bookTitle, currentTotal, currentAvailable, change) {
     const newTotalStock = currentTotal + change;
     const newAvailableStock = currentAvailable + change;
@@ -215,60 +209,34 @@ window.adjustStock = async function(bookId, bookTitle, currentTotal, currentAvai
     }
 
     try {
-        await update(ref(db, `books/${bookId}`), {
-            totalStock: newTotalStock,
-            availableStock: newAvailableStock
-        });
+        await update(ref(db, `books/${bookId}`), { totalStock: newTotalStock, availableStock: newAvailableStock });
         showToast(`Updated stock for "${bookTitle}"`);
-        loadAdminInventory();
-        loadDropdowns();
+        fetchAllDataAndRender();
     } catch (err) {
-        showToast("Error updating stock: " + err.message, 'error');
+        showToast("Error: " + err.message, 'error');
     }
 };
 
-// Populate Checkout Dropdowns
-async function loadDropdowns() {
+function renderCheckoutDropdowns() {
     const checkoutBookSelect = document.getElementById('checkout-book-select');
     const memberSelect = document.getElementById('checkout-member-select');
     
     if (checkoutBookSelect) checkoutBookSelect.innerHTML = '<option value="">Select Book...</option>';
     if (memberSelect) memberSelect.innerHTML = '<option value="">Select Character...</option>';
 
-    const dbRef = ref(db);
+    cachedInventory.forEach(book => {
+        if (checkoutBookSelect && book.availableStock > 0) {
+            checkoutBookSelect.innerHTML += `<option value="${book.id}" data-title="${book.title}" data-stock="${book.availableStock}">${book.title} (Available: ${book.availableStock})</option>`;
+        }
+    });
 
-    const booksSnap = await get(child(dbRef, "books"));
-    if (booksSnap.exists()) {
-        let booksList = [];
-        booksSnap.forEach((childSnap) => {
-            booksList.push({ id: childSnap.key, ...childSnap.val() });
-        });
-        booksList.sort((a, b) => a.title.localeCompare(b.title));
-        
-        booksList.forEach(book => {
-            if (checkoutBookSelect && book.availableStock > 0) {
-                checkoutBookSelect.innerHTML += `<option value="${book.id}" data-title="${book.title}" data-stock="${book.availableStock}">${book.title} (Available: ${book.availableStock})</option>`;
-            }
-        });
-    }
-
-    const membersSnap = await get(child(dbRef, "members"));
-    if (membersSnap.exists()) {
-        let membersList = [];
-        membersSnap.forEach((childSnap) => {
-            membersList.push(childSnap.val());
-        });
-        membersList.sort((a, b) => a.name.localeCompare(b.name));
-
-        membersList.forEach(member => {
-            if (memberSelect) {
-                memberSelect.innerHTML += `<option value="${member.name}">${member.name}</option>`;
-            }
-        });
-    }
+    cachedMembers.forEach(member => {
+        if (memberSelect) {
+            memberSelect.innerHTML += `<option value="${member.name}">${member.name}</option>`;
+        }
+    });
 }
 
-// Handle Checkout Form Submission
 const checkoutForm = document.getElementById('checkout-form');
 if (checkoutForm) {
     checkoutForm.addEventListener('submit', async (e) => {
@@ -282,10 +250,7 @@ if (checkoutForm) {
         const memberName = document.getElementById('checkout-member-select').value;
         const rentalDays = parseInt(document.getElementById('rental-days-input').value);
 
-        if (!bookId || !memberName) {
-            showToast("Please fill out all checkout fields.", 'error');
-            return;
-        }
+        if (!bookId || !memberName) return;
 
         try {
             const checkoutDate = new Date();
@@ -293,125 +258,40 @@ if (checkoutForm) {
             dueDate.setDate(dueDate.getDate() + rentalDays);
 
             const newRentalRef = push(ref(db, 'rentals'));
-            await set(newRentalRef, {
-                bookId,
-                bookTitle,
-                memberName,
-                checkoutDate: checkoutDate.toISOString(),
-                dueDate: dueDate.toISOString(),
-                rentalDays
-            });
+            await set(newRentalRef, { bookId, bookTitle, memberName, checkoutDate: checkoutDate.toISOString(), dueDate: dueDate.toISOString(), rentalDays });
 
             const historyRef = push(ref(db, 'rentalHistory'));
-            await set(historyRef, {
-                bookTitle,
-                memberName,
-                checkoutDate: checkoutDate.toISOString(),
-                dueDate: dueDate.toISOString()
-            });
+            await set(historyRef, { bookTitle, memberName, checkoutDate: checkoutDate.toISOString(), dueDate: dueDate.toISOString() });
 
-            await update(ref(db, `books/${bookId}`), {
-                availableStock: currentStock - 1
-            });
+            await update(ref(db, `books/${bookId}`), { availableStock: currentStock - 1 });
 
             showToast(`Rented "${bookTitle}" to ${memberName}!`);
             checkoutForm.reset();
-            loadDashboardData();
-            loadAdminInventory();
-            loadAdminMembers();
-            loadDropdowns();
+            fetchAllDataAndRender();
         } catch (err) {
-            showToast("Error processing checkout: " + err.message, 'error');
+            showToast("Error: " + err.message, 'error');
         }
     });
 }
 
-// Return Book
 window.returnBook = async function(rentalKey, bookId) {
-    const confirmReturn = confirm("Confirm return of this book and restore inventory stock?");
-    if (!confirmReturn) return;
+    if (!confirm("Confirm return of this book?")) return;
 
     try {
-        const rentalRef = ref(db, `rentals/${rentalKey}`);
-        await remove(rentalRef);
+        await remove(ref(db, `rentals/${rentalKey}`));
 
-        const bookSnap = await get(child(ref(db), `books/${bookId}`));
-        if (bookSnap.exists()) {
-            const currentStock = bookSnap.val().availableStock;
-            const totalStock = bookSnap.val().totalStock;
-            const newStock = Math.min(currentStock + 1, totalStock);
-            
-            await update(ref(db, `books/${bookId}`), {
-                availableStock: newStock
-            });
+        const book = cachedInventory.find(b => b.id === bookId);
+        if (book) {
+            const newStock = Math.min(book.availableStock + 1, book.totalStock);
+            await update(ref(db, `books/${bookId}`), { availableStock: newStock });
         }
 
-        showToast("Book returned and stock restored!");
-        loadDashboardData();
-        loadAdminInventory();
-        loadAdminMembers();
-        loadDropdowns();
+        showToast("Book returned!");
+        fetchAllDataAndRender();
     } catch (err) {
-        showToast("Error processing return: " + err.message, 'error');
+        showToast("Error: " + err.message, 'error');
     }
 };
-
-// Load and Cache Admin Members Profile View
-async function loadAdminMembers() {
-    const membersListDiv = document.getElementById('members-list');
-    if (!membersListDiv) return;
-
-    membersListDiv.innerHTML = '<p class="loading-text">Loading members...</p>';
-
-    try {
-        const dbRef = ref(db);
-        const membersSnap = await get(child(dbRef, "members"));
-        const rentalsSnap = await get(child(dbRef, "rentals"));
-        const historySnap = await get(child(dbRef, "rentalHistory"));
-
-        if (!membersSnap.exists()) {
-            cachedMembers = [];
-            membersListDiv.innerHTML = '<p>No characters registered.</p>';
-            return;
-        }
-
-        cachedActiveRentals = {};
-        if (rentalsSnap.exists()) {
-            rentalsSnap.forEach((childSnap) => {
-                const r = childSnap.val();
-                if (!cachedActiveRentals[r.memberName]) cachedActiveRentals[r.memberName] = [];
-                cachedActiveRentals[r.memberName].push(r);
-            });
-        }
-
-        cachedHistory = { lifetime: {}, missed: {} };
-        if (historySnap.exists()) {
-            historySnap.forEach((childSnap) => {
-                const h = childSnap.val();
-                cachedHistory.lifetime[h.memberName] = (cachedHistory.lifetime[h.memberName] || 0) + 1;
-
-                const dueDate = new Date(h.dueDate);
-                const gracePeriodDeadline = new Date(dueDate.getTime());
-                gracePeriodDeadline.setDate(gracePeriodDeadline.getDate() + GRACE_PERIOD_DAYS);
-
-                if (new Date() > gracePeriodDeadline) {
-                    cachedHistory.missed[h.memberName] = (cachedHistory.missed[h.memberName] || 0) + 1;
-                }
-            });
-        }
-
-        cachedMembers = [];
-        membersSnap.forEach((childSnap) => {
-            cachedMembers.push({ id: childSnap.key, ...childSnap.val() });
-        });
-        cachedMembers.sort((a, b) => a.name.localeCompare(b.name));
-
-        const searchVal = document.getElementById('member-search')?.value || '';
-        renderMembersList(searchVal);
-    } catch (err) {
-        membersListDiv.innerHTML = `<p class="error-message">Error loading members: ${err.message}</p>`;
-    }
-}
 
 function renderMembersList(query) {
     const membersListDiv = document.getElementById('members-list');
@@ -427,7 +307,7 @@ function renderMembersList(query) {
 
     membersListDiv.innerHTML = '';
     filtered.forEach(member => {
-        const activeRentals = cachedActiveRentals[member.name] || [];
+        const activeRentals = cachedRentals.filter(r => r.memberName === member.name);
         const lifetimeCount = cachedHistory.lifetime?.[member.name] || 0;
         const missedCount = cachedHistory.missed?.[member.name] || 0;
 
@@ -473,36 +353,6 @@ function renderMembersList(query) {
     });
 }
 
-// Load and Cache Admin Inventory View
-async function loadAdminInventory() {
-    const inventoryList = document.getElementById('admin-inventory-list');
-    if (!inventoryList) return;
-
-    inventoryList.innerHTML = '<p class="loading-text">Loading inventory stock...</p>';
-
-    try {
-        const dbRef = ref(db);
-        const snapshot = await get(child(dbRef, "books"));
-
-        if (!snapshot.exists()) {
-            cachedInventory = [];
-            inventoryList.innerHTML = '<p>No books currently in stock.</p>';
-            return;
-        }
-
-        cachedInventory = [];
-        snapshot.forEach((childSnap) => {
-            cachedInventory.push({ id: childSnap.key, ...childSnap.val() });
-        });
-        cachedInventory.sort((a, b) => a.title.localeCompare(b.title));
-
-        const searchVal = document.getElementById('inventory-search')?.value || '';
-        renderInventoryList(searchVal);
-    } catch (err) {
-        inventoryList.innerHTML = `<p class="error-message">Error loading inventory: ${err.message}</p>`;
-    }
-}
-
 function renderInventoryList(query) {
     const inventoryList = document.getElementById('admin-inventory-list');
     if (!inventoryList) return;
@@ -533,58 +383,45 @@ function renderInventoryList(query) {
     });
 }
 
-// Load Rentals Ledger
-async function loadDashboardData() {
+function renderRentalsLedger() {
     const rentalsList = document.getElementById('rentals-list');
     if (!rentalsList) return;
 
-    rentalsList.innerHTML = '<p class="loading-text">Loading ledger records...</p>';
-    
-    try {
-        const dbRef = ref(db);
-        const snapshot = await get(child(dbRef, "rentals"));
-        
-        if (!snapshot.exists()) {
-            rentalsList.innerHTML = '<p>No active rentals recorded in the ledger.</p>';
-            return;
-        }
-
-        rentalsList.innerHTML = '';
-        snapshot.forEach((childSnap) => {
-            const key = childSnap.key;
-            const rental = childSnap.val();
-            
-            const checkoutFormatted = formatMonthNameDay(rental.checkoutDate);
-            const dueFormatted = formatMonthNameDay(rental.dueDate);
-            
-            const dueDateObj = new Date(rental.dueDate);
-            const graceDate = new Date(dueDateObj.getTime());
-            graceDate.setDate(graceDate.getDate() + GRACE_PERIOD_DAYS);
-            
-            const now = new Date();
-            const isOverdue = now > graceDate;
-
-            let overdueText = '';
-            if (isOverdue) {
-                const diffTime = Math.abs(now - dueDateObj);
-                const overdueDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-                overdueText = `<span class="badge-warning">⚠️ OVERDUE by ${overdueDays} day(s)</span>`;
-            }
-            
-            rentalsList.innerHTML += `
-                <div class="rental-item ${isOverdue ? 'overdue-warning' : ''}" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
-                    <div>
-                        <p><strong>Book:</strong> ${rental.bookTitle} | <strong>Borrower:</strong> ${rental.memberName}</p>
-                        <p style="font-size: 0.82rem; color: #aaa;">Rented: ${checkoutFormatted} | Due: ${dueFormatted}</p>
-                        ${overdueText}
-                    </div>
-                    <div>
-                        <button class="btn-success btn-sm" onclick="returnBook('${key}', '${rental.bookId}')">Return</button>
-                    </div>
-                </div>
-            `;
-        });
-    } catch (err) {
-        rentalsList.innerHTML = `<p class="error-message">Error loading rentals: ${err.message}</p>`;
+    if (cachedRentals.length === 0) {
+        rentalsList.innerHTML = '<p>No active rentals recorded in the ledger.</p>';
+        return;
     }
+
+    rentalsList.innerHTML = '';
+    cachedRentals.forEach(rental => {
+        const checkoutFormatted = formatMonthNameDay(rental.checkoutDate);
+        const dueFormatted = formatMonthNameDay(rental.dueDate);
+        
+        const dueDateObj = new Date(rental.dueDate);
+        const graceDate = new Date(dueDateObj.getTime());
+        graceDate.setDate(graceDate.getDate() + GRACE_PERIOD_DAYS);
+        
+        const now = new Date();
+        const isOverdue = now > graceDate;
+
+        let overdueText = '';
+        if (isOverdue) {
+            const diffTime = Math.abs(now - dueDateObj);
+            const overdueDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+            overdueText = `<span class="badge-warning">⚠️ OVERDUE by ${overdueDays} day(s)</span>`;
+        }
+        
+        rentalsList.innerHTML += `
+            <div class="rental-item ${isOverdue ? 'overdue-warning' : ''}" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
+                <div>
+                    <p><strong>Book:</strong> ${rental.bookTitle} | <strong>Borrower:</strong> ${rental.memberName}</p>
+                    <p style="font-size: 0.82rem; color: #aaa;">Rented: ${checkoutFormatted} | Due: ${dueFormatted}</p>
+                    ${overdueText}
+                </div>
+                <div>
+                    <button class="btn-success btn-sm" onclick="returnBook('${rental.id}', '${rental.bookId}')">Return</button>
+                </div>
+            </div>
+        `;
+    });
 }
