@@ -326,7 +326,7 @@ button:hover {
 
 .site-footer {
     border-top: 1px solid #333;
-    margin-top: 40px;
+    margin-top: auto;
     width: 100%;
     background-color: transparent;
 }
@@ -335,7 +335,7 @@ button:hover {
     display: flex;
     justify-content: space-between;
     align-items: center;
-    padding: 15px 0;
+    padding: 10px 0; /* Reduced padding to make it slim */
     max-width: 1200px;
     margin-left: auto;
     margin-right: auto;
@@ -359,7 +359,7 @@ button:hover {
     background-color: #1e1e1e;
     color: #e0e0e0;
     border: 1px solid #444;
-    padding: 6px 12px;
+    padding: 4px 10px; /* Slimmer padding for the button */
     border-radius: 6px;
     font-size: 0.85rem;
     font-weight: bold;

@@ -18,7 +18,7 @@ async function loadPublicCatalog() {
     const catalogContainer = document.getElementById('book-catalog');
     if (!catalogContainer) return;
 
-    catalogContainer.innerHTML = '<p class="loading-text">Consulting the library catalog...</p>';
+    catalogContainer.innerHTML = '<p class="loading-text">Fetching library records...</p>';
     
     try {
         const dbRef = ref(db);
@@ -39,7 +39,7 @@ async function loadPublicCatalog() {
         filterAndRenderCatalog("");
 
     } catch (err) {
-        catalogContainer.innerHTML = `<p class="error-message">Error consulting library records: ${err.message}</p>`;
+        catalogContainer.innerHTML = `<p class="error-message">Error fetching library records: ${err.message}</p>`;
     }
 }
 
