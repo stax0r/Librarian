@@ -272,7 +272,7 @@ button:hover { opacity: 0.9; }
     color: #fff;
 }
 
-/* Compact Footer Styles */
+/* Compact & Themed Footer Styles */
 .site-footer {
     display: flex;
     justify-content: space-between;
@@ -289,16 +289,32 @@ button:hover { opacity: 0.9; }
     color: #aaa;
 }
 
-.site-footer img {
-    height: 32px; /* Scales down the massive button image nicely */
-    width: auto;
-    display: block;
-}
-
 .site-footer code {
     background-color: rgba(255, 255, 255, 0.1);
     padding: 3px 6px;
     border-radius: 4px;
     color: #fff;
     font-family: monospace;
+}
+
+/* Custom Themed Donation Button */
+.donation-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    background-color: #1e1e1e;
+    color: #e0e0e0;
+    border: 1px solid #444;
+    padding: 6px 12px;
+    border-radius: 6px;
+    font-size: 0.85rem;
+    font-weight: bold;
+    text-decoration: none;
+    transition: all 0.2s ease;
+}
+
+.donation-btn:hover {
+    background-color: #2a2a2a;
+    border-color: #3b82f6;
+    color: #fff;
 }
