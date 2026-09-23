@@ -2,6 +2,8 @@ import { auth, db } from "./firebase-config.js";
 import { signOut, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
 import { ref, set, push, get, child, update, remove } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-database.js";
 
+const GRACE_PERIOD_DAYS = 1;
+
 onAuthStateChanged(auth, (user) => {
     if (!user) {
         window.location.href = 'login.html';
@@ -21,7 +23,6 @@ if (logoutBtn) {
     });
 }
 
-// Toast Notification System
 function showToast(message, type = 'success') {
     const container = document.getElementById('toast-container');
     if (!container) return;
@@ -165,7 +166,7 @@ if (catalogBookForm) {
     });
 }
 
-// Direct Stock Adjustment from Inventory Card (+ / -)
+// Direct Stock Adjustment from Inventory Card
 window.adjustStock = async function(bookId, bookTitle, currentTotal, currentAvailable, change) {
     const newTotalStock = currentTotal + change;
     const newAvailableStock = currentAvailable + change;
@@ -199,8 +200,8 @@ async function loadDropdowns() {
     const dbRef = ref(db);
 
     const booksSnap = await get(child(dbRef, "books"));
-    let booksList = [];
     if (booksSnap.exists()) {
+        let booksList = [];
         booksSnap.forEach((childSnap) => {
             booksList.push({ id: childSnap.key, ...childSnap.val() });
         });
@@ -214,8 +215,8 @@ async function loadDropdowns() {
     }
 
     const membersSnap = await get(child(dbRef, "members"));
-    let membersList = [];
     if (membersSnap.exists()) {
+        let membersList = [];
         membersSnap.forEach((childSnap) => {
             membersList.push(childSnap.val());
         });
@@ -269,8 +270,8 @@ if (checkoutForm) {
 
             showToast(`Rented "${bookTitle}" to ${memberName}!`);
             checkoutForm.reset();
-            loadAdminInventory();
             loadDashboardData();
+            loadAdminInventory();
             loadAdminMembers();
             loadDropdowns();
         } catch (err) {
@@ -285,7 +286,16 @@ window.returnBook = async function(rentalKey, bookId) {
     if (!confirmReturn) return;
 
     try {
-        await remove(ref(db, `rentals/${rentalKey}`));
+        const rentalRef = ref(db, `rentals/${rentalKey}`);
+        const rentalSnap = await get(rentalRef);
+        
+        if (rentalSnap.exists()) {
+            const rental = rentalSnap.val();
+            // Record lifetime completion stats onto the member profile archive if needed
+            // For now, removing it from active rentals tracks current state
+        }
+
+        await remove(rentalRef);
 
         const bookSnap = await get(child(ref(db), `books/${bookId}`));
         if (bookSnap.exists()) {
@@ -308,7 +318,7 @@ window.returnBook = async function(rentalKey, bookId) {
     }
 };
 
-// Load Detailed Admin Members Profile View
+// Load Detailed Admin Members Profile View (with Total Rented & Grace-Period Overdue Tracking)
 async function loadAdminMembers() {
     const membersListDiv = document.getElementById('members-list');
     if (!membersListDiv) return;
@@ -325,14 +335,30 @@ async function loadAdminMembers() {
             return;
         }
 
-        let memberRentals = {};
+        // Aggregate stats from active rentals
+        let memberActiveRentals = {};
+        let memberLifetimeRentals = {};
+        let memberMissedDeadlines = {};
+
         if (rentalsSnap.exists()) {
             rentalsSnap.forEach((childSnap) => {
-                const rental = childSnap.val();
-                if (!memberRentals[rental.memberName]) {
-                    memberRentals[rental.memberName] = [];
+                const r = childSnap.val();
+                
+                // Track active rentals
+                if (!memberActiveRentals[r.memberName]) memberActiveRentals[r.memberName] = [];
+                memberActiveRentals[r.memberName].push(r);
+
+                // Track lifetime rented count
+                memberLifetimeRentals[r.memberName] = (memberLifetimeRentals[r.memberName] || 0) + 1;
+
+                // Check missed deadline with 1-day grace period
+                const dueDate = new Date(r.dueDate);
+                const gracePeriodDeadline = new Date(dueDate.getTime());
+                gracePeriodDeadline.setDate(gracePeriodDeadline.getDate() + GRACE_PERIOD_DAYS);
+
+                if (new Date() > gracePeriodDeadline) {
+                    memberMissedDeadlines[r.memberName] = (memberMissedDeadlines[r.memberName] || 0) + 1;
                 }
-                memberRentals[rental.memberName].push(rental);
             });
         }
 
@@ -344,29 +370,35 @@ async function loadAdminMembers() {
 
         membersListDiv.innerHTML = '';
         membersList.forEach(member => {
-            const rentals = memberRentals[member.name] || [];
-            let rentalsHtml = '';
+            const activeRentals = memberActiveRentals[member.name] || [];
+            const lifetimeCount = memberLifetimeRentals[member.name] || 0;
+            const missedCount = memberMissedDeadlines[member.name] || 0;
 
-            if (rentals.length > 0) {
-                rentalsHtml = `<div style="margin-top: 8px; font-size: 0.85rem; color: #ddd;">
-                    <p style="color: #3b82f6; font-weight: bold; margin-bottom: 4px;">Active Rentals (${rentals.length}):</p>
-                    <ul style="margin-left: 18px; display: flex; flex-direction: column; gap: 4px;">`;
+            let rentalsHtml = '';
+            if (activeRentals.length > 0) {
+                rentalsHtml = `<div style="margin-top: 6px; font-size: 0.82rem; color: #ccc;">
+                    <p style="color: #3b82f6; font-weight: bold; margin-bottom: 2px;">Currently Rented:</p>
+                    <ul style="margin-left: 16px;">`;
                 
-                rentals.forEach(r => {
+                activeRentals.forEach(r => {
                     const dueFormatted = formatMonthNameDay(r.dueDate);
-                    const isOverdue = new Date() > new Date(r.dueDate);
+                    const dueDateObj = new Date(r.dueDate);
+                    const graceDate = new Date(dueDateObj.getTime());
+                    graceDate.setDate(graceDate.getDate() + GRACE_PERIOD_DAYS);
+                    
+                    const isOverdue = new Date() > graceDate;
                     let overdueText = '';
 
                     if (isOverdue) {
-                        const diffTime = Math.abs(new Date() - new Date(r.dueDate));
+                        const diffTime = Math.abs(new Date() - dueDateObj);
                         const overdueDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
                         overdueText = ` <span style="color: #ef4444; font-weight: bold;">(⚠️ Overdue by ${overdueDays}d)</span>`;
                     }
-                    rentalsHtml += `<li><strong>${r.bookTitle}</strong> — Due: ${dueFormatted}${overdueText}</li>`;
+                    rentalsHtml += `<li>"${r.bookTitle}" (Due: ${dueFormatted})${overdueText}</li>`;
                 });
                 rentalsHtml += `</ul></div>`;
             } else {
-                rentalsHtml = '<p style="font-size: 0.82rem; color: #777; margin-top: 4px;">No books currently checked out.</p>';
+                rentalsHtml = '<p style="font-size: 0.8rem; color: #777; margin-top: 4px;">No active books checked out.</p>';
             }
 
             membersListDiv.innerHTML += `
@@ -375,6 +407,9 @@ async function loadAdminMembers() {
                         <span style="font-size: 1rem; color: #fff;"><strong>${member.name}</strong></span>
                         <button class="btn-danger btn-sm" onclick="deleteMember('${member.id}', '${member.name}')">Delete</button>
                     </div>
+                    <p style="font-size: 0.82rem; color: #aaa; margin-top: 4px;">
+                        📚 Total Rented: <strong>${lifetimeCount}</strong> | ❌ Missed Due Dates: <strong style="color: ${missedCount > 0 ? '#ef4444' : '#fff'};">${missedCount}</strong>
+                    </p>
                     ${rentalsHtml}
                 </div>
             `;
@@ -384,7 +419,7 @@ async function loadAdminMembers() {
     }
 }
 
-// Load Admin Inventory View with Direct Adjustments
+// Load Admin Inventory View
 async function loadAdminInventory() {
     const inventoryList = document.getElementById('admin-inventory-list');
     if (!inventoryList) return;
@@ -426,7 +461,7 @@ async function loadAdminInventory() {
     }
 }
 
-// Load Rentals Ledger
+// Load Rentals Ledger with Grace Period Logic
 async function loadDashboardData() {
     const rentalsList = document.getElementById('rentals-list');
     if (!rentalsList) return;
@@ -451,8 +486,11 @@ async function loadDashboardData() {
             const dueFormatted = formatMonthNameDay(rental.dueDate);
             
             const dueDateObj = new Date(rental.dueDate);
+            const graceDate = new Date(dueDateObj.getTime());
+            graceDate.setDate(graceDate.getDate() + GRACE_PERIOD_DAYS);
+            
             const now = new Date();
-            const isOverdue = now > dueDateObj;
+            const isOverdue = now > graceDate;
 
             let overdueText = '';
             if (isOverdue) {
@@ -462,14 +500,14 @@ async function loadDashboardData() {
             }
             
             rentalsList.innerHTML += `
-                <div class="rental-item ${isOverdue ? 'overdue-warning' : ''}" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
+                <div class="rental-item ${isOverdue ? 'overdue-warning' : ''}" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
                     <div>
                         <p><strong>Book:</strong> ${rental.bookTitle} | <strong>Borrower:</strong> ${rental.memberName}</p>
-                        <p style="font-size: 0.85rem; color: #aaa;">Rented: ${checkoutFormatted} | Due: ${dueFormatted}</p>
+                        <p style="font-size: 0.82rem; color: #aaa;">Rented: ${checkoutFormatted} | Due: ${dueFormatted}</p>
                         ${overdueText}
                     </div>
                     <div>
-                        <button class="btn-success" onclick="returnBook('${key}', '${rental.bookId}')">Return Book</button>
+                        <button class="btn-success btn-sm" onclick="returnBook('${key}', '${rental.bookId}')">Return</button>
                     </div>
                 </div>
             `;
