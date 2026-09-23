@@ -1,0 +1,27 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Library Catalog</title>
+    <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+    <header class="site-header">
+        <h1>📜 Library Catalog</h1>
+        <a href="login.html" class="btn-secondary">Staff Ledger</a>
+    </header>
+
+    <main class="container">
+        <h2>Available Inventory</h2>
+        <p class="subtitle">Browse available books. Out-of-stock items are listed below.</p>
+        
+        <div id="book-catalog" class="catalog-grid">
+            <!-- Dynamic books rendered here -->
+            <p class="loading-text">Loading library records...</p>
+        </div>
+    </main>
+
+    <script type="module" src="js/app.js"></script>
+</body>
+</html>

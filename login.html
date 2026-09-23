@@ -1,0 +1,34 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Staff Login - Library Management</title>
+    <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+    <div class="auth-container">
+        <form id="login-form" class="auth-box">
+            <h2>Staff Authentication</h2>
+            <p>Restricted access for library keepers.</p>
+            
+            <div class="form-group">
+                <label for="email">Email</label>
+                <input type="email" id="email" required placeholder="keeper@realm.com">
+            </div>
+
+            <div class="form-group">
+                <label for="password">Password</label>
+                <input type="password" id="password" required placeholder="••••••••">
+            </div>
+
+            <button type="submit" class="btn-primary">Unlock Ledger</button>
+            <p id="error-msg" class="error-message"></p>
+            <p class="back-link"><a href="index.html">← Return to Public Catalog</a></p>
+        </form>
+    </div>
+
+    <script type="module" src="js/login.js"></script>
+</body>
+</html>

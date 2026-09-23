@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Library Management</title>
+    <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+    <header class="site-header">
+        <h1>⚙️ Library Management</h1>
+        <button id="logout-btn" class="btn-danger">Log Out</button>
+    </header>
+
+    <main class="dashboard-container">
+        <!-- Section 1: Add New Member -->
+        <section class="dash-card">
+            <h2>Register Member</h2>
+            <form id="add-member-form">
+                <div class="form-group">
+                    <input type="text" id="member-name" placeholder="Member Name (e.g. Silas Montclair)" required>
+                </div>
+                <button type="submit" class="btn-primary">Add Member</button>
+            </form>
+        </section>
+
+        <!-- Section 2: Add New Book Inventory -->
+        <section class="dash-card">
+            <h2>Add New Book</h2>
+            <form id="add-book-form">
+                <div class="form-group">
+                    <input type="text" id="book-title" placeholder="Book Title / Tome Name" required>
+                </div>
+                <div class="form-group">
+                    <input type="number" id="book-stock" placeholder="Total Copies" min="1" value="1" required>
+                </div>
+                <button type="submit" class="btn-primary">Add to Inventory</button>
+            </form>
+        </section>
+
+        <!-- Section 3: Active Rentals & Overdue Tracker -->
+        <section class="dash-card full-width">
+            <h2>Active Rentals & Returns Ledger</h2>
+            <div id="rentals-list">
+                <p class="loading-text">Loading active rentals...</p>
+            </div>
+        </section>
+    </main>
+
+    <script type="module" src="js/dashboard.js"></script>
+</body>
+</html>
