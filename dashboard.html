@@ -13,7 +13,7 @@
     </header>
 
     <main class="dashboard-container">
-        <!-- Section 1: Register Member -->
+        <!-- Section 1A: Register Member -->
         <section class="dash-card">
             <h2>Register Member</h2>
             <form id="add-member-form">
@@ -22,6 +22,14 @@
                 </div>
                 <button type="submit" class="btn-primary">Add Member</button>
             </form>
+        </section>
+
+        <!-- Section 1B: Registered Members Management -->
+        <section class="dash-card">
+            <h2>Registered Members</h2>
+            <div id="members-list">
+                <p class="loading-text">Loading members...</p>
+            </div>
         </section>
 
         <!-- Section 2A: Add New Book to Catalog (No stock needed) -->

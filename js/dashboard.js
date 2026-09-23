@@ -8,6 +8,7 @@ onAuthStateChanged(auth, (user) => {
     } else {
         loadDashboardData();
         loadAdminInventory();
+        loadAdminMembers();
         loadDropdowns();
     }
 });
@@ -55,6 +56,7 @@ if (memberForm) {
             await set(newMemberRef, { name: nameInput });
             alert("Character registered successfully!");
             document.getElementById('member-name').value = '';
+            loadAdminMembers();
             loadDropdowns();
         } catch (err) {
             alert("Error adding member: " + err.message);
@@ -62,7 +64,22 @@ if (memberForm) {
     });
 }
 
-// Add New Book to Catalog (Starts with 0 stock until updated via inventory)
+// Delete Member with Confirmation
+window.deleteMember = async function(memberKey, memberName) {
+    const confirmDelete = confirm(`Are you sure you want to delete character "${memberName}"? This action cannot be undone.`);
+    if (!confirmDelete) return;
+
+    try {
+        await remove(ref(db, `members/${memberKey}`));
+        alert(`Character "${memberName}" deleted successfully.`);
+        loadAdminMembers();
+        loadDropdowns();
+    } catch (err) {
+        alert("Error deleting member: " + err.message);
+    }
+};
+
+// Add New Book to Catalog
 const catalogBookForm = document.getElementById('add-catalog-book-form');
 if (catalogBookForm) {
     catalogBookForm.addEventListener('submit', async (e) => {
@@ -185,7 +202,7 @@ async function loadDropdowns() {
     let membersList = [];
     if (membersSnap.exists()) {
         membersSnap.forEach((childSnap) => {
-            membersList.push(childSnap.val());
+            membersList.push({ id: childSnap.key, ...childSnap.val() });
         });
         membersList.sort((a, b) => a.name.localeCompare(b.name));
 
@@ -273,6 +290,42 @@ window.returnBook = async function(rentalKey, bookId) {
         alert("Error processing return: " + err.message);
     }
 };
+
+// Load Admin Members List (Alphabetically Sorted)
+async function loadAdminMembers() {
+    const membersListDiv = document.getElementById('members-list');
+    if (!membersListDiv) return;
+
+    membersListDiv.innerHTML = '<p class="loading-text">Loading members...</p>';
+
+    try {
+        const dbRef = ref(db);
+        const snapshot = await get(child(dbRef, "members"));
+
+        if (!snapshot.exists()) {
+            membersListDiv.innerHTML = '<p>No characters registered.</p>';
+            return;
+        }
+
+        let membersList = [];
+        snapshot.forEach((childSnap) => {
+            membersList.push({ id: childSnap.key, ...childSnap.val() });
+        });
+        membersList.sort((a, b) => a.name.localeCompare(b.name));
+
+        membersListDiv.innerHTML = '';
+        membersList.forEach(member => {
+            membersListDiv.innerHTML += `
+                <div class="rental-item" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
+                    <span><strong>${member.name}</strong></span>
+                    <button class="btn-danger" style="padding: 5px 10px; font-size: 0.85rem;" onclick="deleteMember('${member.id}', '${member.name}')">Delete</button>
+                </div>
+            `;
+        });
+    } catch (err) {
+        membersListDiv.innerHTML = `<p class="error-message">Error loading members: ${err.message}</p>`;
+    }
+}
 
 // Load Admin Inventory View (Alphabetically Sorted)
 async function loadAdminInventory() {
