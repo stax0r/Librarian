@@ -8,50 +8,34 @@ body {
     font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
     background: #121212;
     color: #e0e0e0;
-    padding: 30px;
+    min-height: 100vh;
     display: flex;
     flex-direction: column;
-    min-height: 100vh;
+    justify-content: space-between;
+    padding: 40px 20px 0 20px; /* Respectable top/side margins */
 }
 
-main, .container, .dashboard-container, .auth-container {
-    flex: 1;
-    max-width: 1200px; /* Aligns container width with header/footer */
+/* Standardized Content Wrapper for Header, Main, and Footer alignment */
+.site-header,
+main, 
+.container, 
+.dashboard-container, 
+.auth-container, 
+.site-footer {
+    width: 100%;
+    max-width: 1200px;
     margin-left: auto;
     margin-right: auto;
-    width: 100%;
 }
 
-.dashboard-container {
-    display: grid;
-    grid-template-columns: repeat(2, 1fr);
-    gap: 25px;
-}
-
-.container {
-    max-width: 1000px;
-}
-
-.auth-container {
-    display: flex;
-    justify-content: center;
-    align-items: center;
-    max-width: 450px;
-    margin: auto;
-    height: auto;
-}
-
+/* Header Styling */
 .site-header {
     display: flex;
     justify-content: space-between;
     align-items: center;
     border-bottom: 1px solid #333;
     padding-bottom: 20px;
-    margin-bottom: 40px; /* Space between header and body */
-    max-width: 1200px;
-    margin-left: auto;
-    margin-right: auto;
-    width: 100%;
+    margin-bottom: 40px;
     flex-wrap: wrap;
     gap: 15px;
 }
@@ -62,16 +46,18 @@ main, .container, .dashboard-container, .auth-container {
     align-items: center;
 }
 
-.container {
-    max-width: 1000px;
-    margin: 0 auto;
-    width: 100%;
+/* Main Content Area */
+main, .container, .dashboard-container, .auth-container {
+    flex: 1;
+    margin-bottom: 60px;
 }
 
+.container {
+    max-width: 1000px;
+}
+
+/* Dashboard 2x2 Grid */
 .dashboard-container {
-    max-width: 1200px;
-    margin: 0 auto;
-    width: 100%;
     display: grid;
     grid-template-columns: repeat(2, 1fr);
     gap: 25px;
@@ -82,9 +68,8 @@ main, .container, .dashboard-container, .auth-container {
     justify-content: center;
     align-items: center;
     max-width: 450px;
-    margin: auto;
-    width: 100%;
     height: auto;
+    margin: auto;
 }
 
 .auth-box,
@@ -344,22 +329,18 @@ button:hover {
     color: #fff;
 }
 
+/* Standardized Footer matching Header width with top border constrained */
 .site-footer {
     border-top: 1px solid #333;
-    margin-top: 60px; /* Space between body and footer */
-    width: 100%;
     background-color: transparent;
-    padding-bottom: 0; /* Fixes content right on the very bottom */
+    margin-top: auto;
 }
 
 .footer-content {
     display: flex;
     justify-content: space-between;
-    align-items: center;
-    padding: 15px 0;
-    max-width: 1200px; /* Exact same max-width as header to align vertical lines */
-    margin-left: auto;
-    margin-right: auto;
+    align-items: flex-end; /* Pins contents INSIDE the footer to the bottom */
+    padding: 20px 0;
     width: 100%;
     font-size: 0.85rem;
     color: #aaa;
@@ -380,7 +361,7 @@ button:hover {
     background-color: #1e1e1e;
     color: #e0e0e0;
     border: 1px solid #444;
-    padding: 4px 10px;
+    padding: 6px 12px;
     border-radius: 6px;
     font-size: 0.85rem;
     font-weight: bold;
