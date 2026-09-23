@@ -21,6 +21,30 @@ if (logoutBtn) {
     });
 }
 
+// Modal Toggle Logic
+const memberModal = document.getElementById('member-modal');
+const bookModal = document.getElementById('book-modal');
+
+document.getElementById('open-member-modal-btn').addEventListener('click', () => {
+    memberModal.style.display = 'flex';
+});
+
+document.getElementById('open-book-modal-btn').addEventListener('click', () => {
+    bookModal.style.display = 'flex';
+});
+
+document.querySelectorAll('.close-modal').forEach(btn => {
+    btn.addEventListener('click', () => {
+        memberModal.style.display = 'none';
+        bookModal.style.display = 'none';
+    });
+});
+
+window.addEventListener('click', (e) => {
+    if (e.target === memberModal) memberModal.style.display = 'none';
+    if (e.target === bookModal) bookModal.style.display = 'none';
+});
+
 function formatMonthNameDay(dateString) {
     const d = new Date(dateString);
     return d.toLocaleDateString('en-US', { month: 'long', day: 'numeric' });
@@ -56,6 +80,7 @@ if (memberForm) {
             await set(newMemberRef, { name: nameInput });
             alert("Character registered successfully!");
             document.getElementById('member-name').value = '';
+            memberModal.style.display = 'none';
             loadAdminMembers();
             loadDropdowns();
         } catch (err) {
@@ -113,6 +138,7 @@ if (catalogBookForm) {
             });
             alert("New book added to catalog! Use the inventory tool to add copies.");
             document.getElementById('new-catalog-title').value = '';
+            bookModal.style.display = 'none';
             loadAdminInventory();
             loadDropdowns();
         } catch (err) {
@@ -168,7 +194,7 @@ if (updateStockForm) {
     });
 }
 
-// Populate All Dropdowns (Alphabetically Sorted)
+// Populate Dropdowns
 async function loadDropdowns() {
     const checkoutBookSelect = document.getElementById('checkout-book-select');
     const updateBookSelect = document.getElementById('update-book-select');
@@ -202,7 +228,7 @@ async function loadDropdowns() {
     let membersList = [];
     if (membersSnap.exists()) {
         membersSnap.forEach((childSnap) => {
-            membersList.push({ id: childSnap.key, ...childSnap.val() });
+            membersList.push(childSnap.val());
         });
         membersList.sort((a, b) => a.name.localeCompare(b.name));
 
@@ -256,6 +282,7 @@ if (checkoutForm) {
             checkoutForm.reset();
             loadAdminInventory();
             loadDashboardData();
+            loadAdminMembers();
             loadDropdowns();
         } catch (err) {
             alert("Error processing checkout: " + err.message);
@@ -263,7 +290,7 @@ if (checkoutForm) {
     });
 }
 
-// Return Book (Stock Restoration Only)
+// Return Book
 window.returnBook = async function(rentalKey, bookId) {
     const confirmReturn = confirm("Confirm return of this book and restore inventory stock?");
     if (!confirmReturn) return;
@@ -285,13 +312,14 @@ window.returnBook = async function(rentalKey, bookId) {
         alert("Book returned successfully and stock restored!");
         loadDashboardData();
         loadAdminInventory();
+        loadAdminMembers();
         loadDropdowns();
     } catch (err) {
         alert("Error processing return: " + err.message);
     }
 };
 
-// Load Admin Members List (Alphabetically Sorted)
+// Load Admin Members with Active Rentals and Missed/Overdue Info
 async function loadAdminMembers() {
     const membersListDiv = document.getElementById('members-list');
     if (!membersListDiv) return;
@@ -300,25 +328,65 @@ async function loadAdminMembers() {
 
     try {
         const dbRef = ref(db);
-        const snapshot = await get(child(dbRef, "members"));
+        const membersSnap = await get(child(dbRef, "members"));
+        const rentalsSnap = await get(child(dbRef, "rentals"));
 
-        if (!snapshot.exists()) {
+        if (!membersSnap.exists()) {
             membersListDiv.innerHTML = '<p>No characters registered.</p>';
             return;
         }
 
+        // Map rentals by memberName
+        let memberRentals = {};
+        if (rentalsSnap.exists()) {
+            rentalsSnap.forEach((childSnap) => {
+                const rental = childSnap.val();
+                if (!memberRentals[rental.memberName]) {
+                    memberRentals[rental.memberName] = [];
+                }
+                memberRentals[rental.memberName].push(rental);
+            });
+        }
+
         let membersList = [];
-        snapshot.forEach((childSnap) => {
+        membersSnap.forEach((childSnap) => {
             membersList.push({ id: childSnap.key, ...childSnap.val() });
         });
         membersList.sort((a, b) => a.name.localeCompare(b.name));
 
         membersListDiv.innerHTML = '';
         membersList.forEach(member => {
+            const rentals = memberRentals[member.name] || [];
+            let rentalsHtml = '';
+
+            if (rentals.length > 0) {
+                rentalsHtml = '<div style="margin-top: 6px; font-size: 0.82rem; color: #bbb;"><strong>Rented Books:</strong><ul style="margin-left: 15px;">';
+                rentals.forEach(r => {
+                    const dueFormatted = formatMonthNameDay(r.dueDate);
+                    const isOverdue = new Date() > new Date(r.dueDate);
+                    let statusColor = '#aaa';
+                    let overdueTag = '';
+
+                    if (isOverdue) {
+                        const diffTime = Math.abs(new Date() - new Date(r.dueDate));
+                        const overdueDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+                        statusColor = '#ef4444';
+                        overdueTag = ` <span style="color: #ef4444; font-weight: bold;">(Overdue by ${overdueDays}d)</span>`;
+                    }
+                    rentalsHtml += `<li style="color: ${statusColor};">"${r.bookTitle}" (Due: ${dueFormatted})${overdueTag}</li>`;
+                });
+                rentalsHtml += '</ul></div>';
+            } else {
+                rentalsHtml = '<p style="font-size: 0.8rem; color: #777; margin-top: 4px;">No active rentals.</p>';
+            }
+
             membersListDiv.innerHTML += `
-                <div class="rental-item" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
-                    <span><strong>${member.name}</strong></span>
-                    <button class="btn-danger" style="padding: 5px 10px; font-size: 0.85rem;" onclick="deleteMember('${member.id}', '${member.name}')">Delete</button>
+                <div class="rental-item" style="margin-bottom: 10px;">
+                    <div style="display: flex; justify-content: space-between; align-items: center;">
+                        <span><strong>${member.name}</strong></span>
+                        <button class="btn-danger" style="padding: 4px 8px; font-size: 0.75rem;" onclick="deleteMember('${member.id}', '${member.name}')">Delete</button>
+                    </div>
+                    ${rentalsHtml}
                 </div>
             `;
         });
@@ -327,7 +395,7 @@ async function loadAdminMembers() {
     }
 }
 
-// Load Admin Inventory View (Alphabetically Sorted)
+// Load Admin Inventory View
 async function loadAdminInventory() {
     const inventoryList = document.getElementById('admin-inventory-list');
     if (!inventoryList) return;
@@ -352,7 +420,7 @@ async function loadAdminInventory() {
         inventoryList.innerHTML = '';
         booksList.forEach(book => {
             inventoryList.innerHTML += `
-                <div class="rental-item" style="display: flex; justify-content: space-between; align-items: center;">
+                <div class="rental-item" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
                     <span><strong>${book.title}</strong></span>
                     <span>Available: <strong>${book.availableStock}</strong> / Total: ${book.totalStock}</span>
                 </div>
