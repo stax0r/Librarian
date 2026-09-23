@@ -1,15 +1,16 @@
 import { auth, db } from "./firebase-config.js";
 import { signOut, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
-import { ref, set, push, get, child, update } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-database.js";
+import { ref, set, push, get, child, update, remove } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-database.js";
 
-const OVERDUE_LIMIT_DAYS = 7;
-
-function checkIsOverdue(checkoutDateString) {
-    const checkoutDate = new Date(checkoutDateString);
-    const today = new Date();
-    const diffTime = Math.abs(today - checkoutDate);
-    return Math.ceil(diffTime / (1000 * 60 * 60 * 24)) > OVERDUE_LIMIT_DAYS;
-}
+// Set default datetime-local value to 3 days from now
+window.addEventListener('DOMContentLoaded', () => {
+    const dueInput = document.getElementById('due-date-input');
+    if (dueInput) {
+        const defaultDate = new Date();
+        defaultDate.setDate(defaultDate.getDate() + 3);
+        dueInput.value = defaultDate.toISOString().slice(0, 16);
+    }
+});
 
 onAuthStateChanged(auth, (user) => {
     if (!user) {
@@ -34,7 +35,7 @@ const memberForm = document.getElementById('add-member-form');
 if (memberForm) {
     memberForm.addEventListener('submit', async (e) => {
         e.preventDefault();
-        const name = document.getElementById('member-name').value;
+        const name = document.getElementById('member-name').value.trim();
         try {
             const newMemberRef = push(ref(db, 'members'));
             await set(newMemberRef, { name });
@@ -47,17 +48,37 @@ if (memberForm) {
     });
 }
 
-// Add Book
+// Add Book with Duplicate Name Check
 const bookForm = document.getElementById('add-book-form');
 if (bookForm) {
     bookForm.addEventListener('submit', async (e) => {
         e.preventDefault();
-        const title = document.getElementById('book-title').value;
+        const titleInput = document.getElementById('book-title').value.trim();
         const totalStock = parseInt(document.getElementById('book-stock').value);
+
         try {
+            const dbRef = ref(db);
+            const snapshot = await get(child(dbRef, "books"));
+            
+            // Check for duplicate book name (case-insensitive)
+            let duplicateFound = false;
+            if (snapshot.exists()) {
+                snapshot.forEach((childSnap) => {
+                    const existingBook = childSnap.val();
+                    if (existingBook.title.toLowerCase() === titleInput.toLowerCase()) {
+                        duplicateFound = true;
+                    }
+                });
+            }
+
+            if (duplicateFound) {
+                alert(`Error: A book with the title "${titleInput}" already exists in the inventory!`);
+                return;
+            }
+
             const newBookRef = push(ref(db, 'books'));
             await set(newBookRef, {
-                title,
+                title: titleInput,
                 totalStock,
                 availableStock: totalStock
             });
@@ -72,7 +93,7 @@ if (bookForm) {
     });
 }
 
-// Populate Checkout Dropdowns
+// Populate Checkout Dropdowns (Alphabetically Sorted)
 async function loadDropdowns() {
     const bookSelect = document.getElementById('checkout-book-select');
     const memberSelect = document.getElementById('checkout-member-select');
@@ -83,28 +104,38 @@ async function loadDropdowns() {
 
     const dbRef = ref(db);
 
-    // Load available books with stock > 0
+    // Load available books
     const booksSnap = await get(child(dbRef, "books"));
+    let booksList = [];
     if (booksSnap.exists()) {
         booksSnap.forEach((childSnap) => {
-            const book = childSnap.val();
+            booksList.push({ id: childSnap.key, ...childSnap.val() });
+        });
+        booksList.sort((a, b) => a.title.localeCompare(b.title));
+        
+        booksList.forEach(book => {
             if (book.availableStock > 0) {
-                bookSelect.innerHTML += `<option value="${childSnap.key}" data-title="${book.title}" data-stock="${book.availableStock}">${book.title} (Available: ${book.availableStock})</option>`;
+                bookSelect.innerHTML += `<option value="${book.id}" data-title="${book.title}" data-stock="${book.availableStock}">${book.title} (Available: ${book.availableStock})</option>`;
             }
         });
     }
 
     // Load members
     const membersSnap = await get(child(dbRef, "members"));
+    let membersList = [];
     if (membersSnap.exists()) {
         membersSnap.forEach((childSnap) => {
-            const member = childSnap.val();
+            membersList.push(childSnap.val());
+        });
+        membersList.sort((a, b) => a.name.localeCompare(b.name));
+
+        membersList.forEach(member => {
             memberSelect.innerHTML += `<option value="${member.name}">${member.name}</option>`;
         });
     }
 }
 
-// Handle Checkout Form Submission
+// Handle Checkout Form Submission (with custom datetime & pricing)
 const checkoutForm = document.getElementById('checkout-form');
 if (checkoutForm) {
     checkoutForm.addEventListener('submit', async (e) => {
@@ -116,23 +147,28 @@ if (checkoutForm) {
         const bookTitle = selectedOption.getAttribute('data-title');
         const currentStock = parseInt(selectedOption.getAttribute('data-stock'));
         const memberName = document.getElementById('checkout-member-select').value;
+        const dueDate = document.getElementById('due-date-input').value;
+        const basePrice = parseFloat(document.getElementById('base-price-input').value);
+        const dailyFee = parseFloat(document.getElementById('daily-fee-input').value);
 
-        if (!bookId || !memberName) {
-            alert("Please select both a book and a character.");
+        if (!bookId || !memberName || !dueDate) {
+            alert("Please fill out all checkout fields.");
             return;
         }
 
         try {
-            // 1. Create rental record with today's date
+            const checkoutTime = new Date().toISOString();
             const newRentalRef = push(ref(db, 'rentals'));
             await set(newRentalRef, {
                 bookId,
                 bookTitle,
                 memberName,
-                checkoutDate: new Date().toISOString()
+                checkoutDate: checkoutTime,
+                dueDate,
+                basePrice,
+                dailyFee
             });
 
-            // 2. Decrement available stock on the book
             await update(ref(db, `books/${bookId}`), {
                 availableStock: currentStock - 1
             });
@@ -148,7 +184,50 @@ if (checkoutForm) {
     });
 }
 
-// Load Admin Inventory View
+// Calculate total cost on return and process it
+window.returnBook = async function(rentalKey, bookId, basePrice, dailyFee, dueDateString) {
+    const dueDate = new Date(dueDateString);
+    const now = new Date();
+    
+    // Calculate days late (if any)
+    let extraDays = 0;
+    if (now > dueDate) {
+        const diffTime = Math.abs(now - dueDate);
+        extraDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+    }
+
+    const totalOwed = basePrice + (extraDays * dailyFee);
+
+    const confirmReturn = confirm(`Return Summary:\n- Base Price: ${basePrice}\n- Late Days: ${extraDays}\n- Late Fee: ${extraDays * dailyFee}\n\nTotal Owed by Character: ${totalOwed}\n\nConfirm return and restore stock?`);
+    
+    if (!confirmReturn) return;
+
+    try {
+        // 1. Remove rental record
+        await remove(ref(db, `rentals/${rentalKey}`));
+
+        // 2. Restore book stock (+1)
+        const bookSnap = await get(child(ref(db), `books/${bookId}`));
+        if (bookSnap.exists()) {
+            const currentStock = bookSnap.val().availableStock;
+            const totalStock = bookSnap.val().totalStock;
+            const newStock = Math.min(currentStock + 1, totalStock);
+            
+            await update(ref(db, `books/${bookId}`), {
+                availableStock: newStock
+            });
+        }
+
+        alert(`Book returned successfully! Collected total: ${totalOwed}`);
+        loadDashboardData();
+        loadAdminInventory();
+        loadDropdowns();
+    } catch (err) {
+        alert("Error processing return: " + err.message);
+    }
+};
+
+// Load Admin Inventory View (Alphabetically sorted)
 async function loadAdminInventory() {
     const inventoryList = document.getElementById('admin-inventory-list');
     if (!inventoryList) return;
@@ -164,9 +243,14 @@ async function loadAdminInventory() {
             return;
         }
 
-        inventoryList.innerHTML = '';
+        let booksList = [];
         snapshot.forEach((childSnap) => {
-            const book = childSnap.val();
+            booksList.push(childSnap.val());
+        });
+        booksList.sort((a, b) => a.title.localeCompare(b.title));
+
+        inventoryList.innerHTML = '';
+        booksList.forEach(book => {
             inventoryList.innerHTML += `
                 <div class="rental-item" style="display: flex; justify-content: space-between; align-items: center;">
                     <span><strong>${book.title}</strong></span>
@@ -179,7 +263,7 @@ async function loadAdminInventory() {
     }
 }
 
-// Load Rentals & Overdue Check
+// Load Rentals & Overdue Check with Return Button & Cost Calculation
 async function loadDashboardData() {
     const rentalsList = document.getElementById('rentals-list');
     if (!rentalsList) return;
@@ -197,13 +281,24 @@ async function loadDashboardData() {
 
         rentalsList.innerHTML = '';
         snapshot.forEach((childSnap) => {
+            const key = childSnap.key;
             const rental = childSnap.val();
-            const isOverdue = rental.checkoutDate ? checkIsOverdue(rental.checkoutDate) : false;
+            
+            const checkoutFormatted = new Date(rental.checkoutDate).toLocaleString();
+            const dueFormatted = new Date(rental.dueDate).toLocaleString();
+            const isOverdue = new Date() > new Date(rental.dueDate);
             
             rentalsList.innerHTML += `
-                <div class="rental-item ${isOverdue ? 'overdue-warning' : ''}">
-                    <p><strong>Book:</strong> ${rental.bookTitle || rental.bookId} | <strong>Borrower:</strong> ${rental.memberName}</p>
-                    ${isOverdue ? '<span class="badge-warning">⚠️ OVERDUE WARNING (> ' + OVERDUE_LIMIT_DAYS + ' days)</span>' : ''}
+                <div class="rental-item ${isOverdue ? 'overdue-warning' : ''}" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
+                    <div>
+                        <p><strong>Book:</strong> ${rental.bookTitle} | <strong>Borrower:</strong> ${rental.memberName}</p>
+                        <p style="font-size: 0.85rem; color: #aaa;">Rented: ${checkoutFormatted} | Due: ${dueFormatted}</p>
+                        <p style="font-size: 0.85rem; color: #888;">Rates: Base ${rental.basePrice} + ${rental.dailyFee}/day</p>
+                        ${isOverdue ? '<span class="badge-warning">⚠️ OVERDUE</span>' : ''}
+                    </div>
+                    <div>
+                        <button class="btn-success" onclick="returnBook('${key}', '${rental.bookId}', ${rental.basePrice}, ${rental.dailyFee}, '${rental.dueDate}')">Return & Calculate Owed</button>
+                    </div>
                 </div>
             `;
         });

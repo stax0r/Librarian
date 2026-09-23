@@ -32,6 +32,10 @@ async function loadPublicCatalog() {
             }
         });
 
+        // Sort alphabetically by title
+        availableBooks.sort((a, b) => a.title.localeCompare(b.title));
+        unavailableBooks.sort((a, b) => a.title.localeCompare(b.title));
+
         availableBooks.forEach(book => {
             catalogContainer.innerHTML += `
                 <div class="book-card available">

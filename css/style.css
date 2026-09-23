@@ -122,3 +122,6 @@ button:hover { opacity: 0.9; }
     display: inline-block;
     margin-top: 5px;
 }
+
+.btn-success { background: #10b981; color: #fff; padding: 6px 12px; border: none; border-radius: 4px; cursor: pointer; font-weight: bold; }
+.btn-success:hover { opacity: 0.9; }
