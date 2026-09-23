@@ -16,6 +16,7 @@ onAuthStateChanged(auth, (user) => {
         window.location.href = 'login.html';
     } else {
         loadDashboardData();
+        loadAdminInventory();
     }
 });
 
@@ -61,10 +62,42 @@ if (bookForm) {
             alert("Book added to inventory!");
             document.getElementById('book-title').value = '';
             document.getElementById('book-stock').value = '1';
+            loadAdminInventory(); // Refresh list immediately
         } catch (err) {
             alert("Error adding book: " + err.message);
         }
     });
+}
+
+// Load Admin Inventory View
+async function loadAdminInventory() {
+    const inventoryList = document.getElementById('admin-inventory-list');
+    if (!inventoryList) return;
+
+    inventoryList.innerHTML = '<p class="loading-text">Loading inventory stock...</p>';
+
+    try {
+        const dbRef = ref(db);
+        const snapshot = await get(child(dbRef, "books"));
+
+        if (!snapshot.exists()) {
+            inventoryList.innerHTML = '<p>No books currently in stock.</p>';
+            return;
+        }
+
+        inventoryList.innerHTML = '';
+        snapshot.forEach((childSnap) => {
+            const book = childSnap.val();
+            inventoryList.innerHTML += `
+                <div class="rental-item" style="display: flex; justify-content: space-between; align-items: center;">
+                    <span><strong>${book.title}</strong></span>
+                    <span>Available: <strong>${book.availableStock}</strong> / Total: ${book.totalStock}</span>
+                </div>
+            `;
+        });
+    } catch (err) {
+        inventoryList.innerHTML = `<p class="error-message">Error loading inventory: ${err.message}</p>`;
+    }
 }
 
 // Load Rentals & Overdue Check

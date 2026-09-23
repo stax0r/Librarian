@@ -13,7 +13,7 @@
     </header>
 
     <main class="dashboard-container">
-        <!-- Section 1: Add New Member -->
+        <!-- Section 1: Register Member -->
         <section class="dash-card">
             <h2>Register Member</h2>
             <form id="add-member-form">
@@ -38,7 +38,15 @@
             </form>
         </section>
 
-        <!-- Section 3: Active Rentals & Overdue Tracker -->
+        <!-- Section 3: Admin Inventory View -->
+        <section class="dash-card full-width">
+            <h2>Live Inventory Stock</h2>
+            <div id="admin-inventory-list">
+                <p class="loading-text">Loading inventory...</p>
+            </div>
+        </section>
+
+        <!-- Section 4: Active Rentals & Overdue Tracker -->
         <section class="dash-card full-width">
             <h2>Active Rentals & Returns Ledger</h2>
             <div id="rentals-list">
