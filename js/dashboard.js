@@ -128,7 +128,7 @@ async function loadDropdowns() {
     }
 }
 
-// Handle Checkout Form Submission
+// Handle Checkout Form Submission (Dates Only)
 const checkoutForm = document.getElementById('checkout-form');
 if (checkoutForm) {
     checkoutForm.addEventListener('submit', async (e) => {
@@ -141,7 +141,6 @@ if (checkoutForm) {
         const currentStock = parseInt(selectedOption.getAttribute('data-stock'));
         const memberName = document.getElementById('checkout-member-select').value;
         const rentalDays = parseInt(document.getElementById('rental-days-input').value);
-        const dailyRate = parseFloat(document.getElementById('daily-rate-input').value);
 
         if (!bookId || !memberName) {
             alert("Please fill out all checkout fields.");
@@ -160,8 +159,7 @@ if (checkoutForm) {
                 memberName,
                 checkoutDate: checkoutDate.toISOString(),
                 dueDate: dueDate.toISOString(),
-                rentalDays,
-                dailyRate
+                rentalDays
             });
 
             await update(ref(db, `books/${bookId}`), {
@@ -179,25 +177,9 @@ if (checkoutForm) {
     });
 }
 
-// Return Book & Calculate Total Owed
-window.returnBook = async function(rentalKey, bookId, rentalDays, dailyRate, dueDateString) {
-    const dueDate = new Date(dueDateString);
-    const now = new Date();
-    
-    let standardTotal = rentalDays * dailyRate;
-    let lateFee = 0;
-    let extraDaysLate = 0;
-
-    if (now > dueDate) {
-        const diffTime = Math.abs(now - dueDate);
-        extraDaysLate = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-        lateFee = extraDaysLate * dailyRate;
-    }
-
-    const totalOwed = standardTotal + lateFee;
-
-    const confirmReturn = confirm(`Return Summary:\n- Base Rental Cost (${rentalDays} days @ ${dailyRate}/day): ${standardTotal}\n- Overdue Days: ${extraDaysLate}\n- Added Late Fee: ${lateFee}\n\nTotal Owed by Character: ${totalOwed}\n\nConfirm return and restore stock?`);
-    
+// Return Book (Stock Restoration Only)
+window.returnBook = async function(rentalKey, bookId) {
+    const confirmReturn = confirm("Confirm return of this book and restore inventory stock?");
     if (!confirmReturn) return;
 
     try {
@@ -214,7 +196,7 @@ window.returnBook = async function(rentalKey, bookId, rentalDays, dailyRate, due
             });
         }
 
-        alert(`Book returned successfully! Collected total: ${totalOwed}`);
+        alert("Book returned successfully and stock restored!");
         loadDashboardData();
         loadAdminInventory();
         loadDropdowns();
@@ -259,7 +241,7 @@ async function loadAdminInventory() {
     }
 }
 
-// Load Rentals with Clean Month/Day Format and Specific Overdue Day Counts
+// Load Rentals with Clean Month/Day Format and Overdue Day Counts
 async function loadDashboardData() {
     const rentalsList = document.getElementById('rentals-list');
     if (!rentalsList) return;
@@ -298,12 +280,11 @@ async function loadDashboardData() {
                 <div class="rental-item ${isOverdue ? 'overdue-warning' : ''}" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
                     <div>
                         <p><strong>Book:</strong> ${rental.bookTitle} | <strong>Borrower:</strong> ${rental.memberName}</p>
-                        <p style="font-size: 0.85rem; color: #aaa;">Rented at: ${checkoutFormatted} | Due: ${dueFormatted}</p>
-                        <p style="font-size: 0.85rem; color: #888;">Rate: ${rental.rentalDays} days @ ${rental.dailyRate}/day</p>
+                        <p style="font-size: 0.85rem; color: #aaa;">Rented: ${checkoutFormatted} | Due: ${dueFormatted}</p>
                         ${overdueText}
                     </div>
                     <div>
-                        <button class="btn-success" onclick="returnBook('${key}', '${rental.bookId}', ${rental.rentalDays}, ${rental.dailyRate}, '${rental.dueDate}')">Return & Calculate Owed</button>
+                        <button class="btn-success" onclick="returnBook('${key}', '${rental.bookId}')">Return Book</button>
                     </div>
                 </div>
             `;
