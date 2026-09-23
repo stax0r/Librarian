@@ -230,7 +230,7 @@ async function loadDropdowns() {
     }
 }
 
-// Handle Checkout Form Submission
+// Handle Checkout Form Submission (Records both active rental and increments lifetime rental stats archive)
 const checkoutForm = document.getElementById('checkout-form');
 if (checkoutForm) {
     checkoutForm.addEventListener('submit', async (e) => {
@@ -254,6 +254,7 @@ if (checkoutForm) {
             const dueDate = new Date(checkoutDate.getTime());
             dueDate.setDate(dueDate.getDate() + rentalDays);
 
+            // 1. Push to active rentals ledger
             const newRentalRef = push(ref(db, 'rentals'));
             await set(newRentalRef, {
                 bookId,
@@ -262,6 +263,15 @@ if (checkoutForm) {
                 checkoutDate: checkoutDate.toISOString(),
                 dueDate: dueDate.toISOString(),
                 rentalDays
+            });
+
+            // 2. Also log to a lifetime history archive node so total rentals persists even when books are returned
+            const historyRef = push(ref(db, 'rentalHistory'));
+            await set(historyRef, {
+                bookTitle,
+                memberName,
+                checkoutDate: checkoutDate.toISOString(),
+                dueDate: dueDate.toISOString()
             });
 
             await update(ref(db, `books/${bookId}`), {
@@ -287,14 +297,6 @@ window.returnBook = async function(rentalKey, bookId) {
 
     try {
         const rentalRef = ref(db, `rentals/${rentalKey}`);
-        const rentalSnap = await get(rentalRef);
-        
-        if (rentalSnap.exists()) {
-            const rental = rentalSnap.val();
-            // Record lifetime completion stats onto the member profile archive if needed
-            // For now, removing it from active rentals tracks current state
-        }
-
         await remove(rentalRef);
 
         const bookSnap = await get(child(ref(db), `books/${bookId}`));
@@ -318,7 +320,7 @@ window.returnBook = async function(rentalKey, bookId) {
     }
 };
 
-// Load Detailed Admin Members Profile View (with Total Rented & Grace-Period Overdue Tracking)
+// Load Detailed Admin Members Profile View (Tracks Total Lifetime Rentals via 'rentalHistory')
 async function loadAdminMembers() {
     const membersListDiv = document.getElementById('members-list');
     if (!membersListDiv) return;
@@ -329,35 +331,41 @@ async function loadAdminMembers() {
         const dbRef = ref(db);
         const membersSnap = await get(child(dbRef, "members"));
         const rentalsSnap = await get(child(dbRef, "rentals"));
+        const historySnap = await get(child(dbRef, "rentalHistory"));
 
         if (!membersSnap.exists()) {
             membersListDiv.innerHTML = '<p>No characters registered.</p>';
             return;
         }
 
-        // Aggregate stats from active rentals
+        // Map active rentals
         let memberActiveRentals = {};
-        let memberLifetimeRentals = {};
-        let memberMissedDeadlines = {};
-
         if (rentalsSnap.exists()) {
             rentalsSnap.forEach((childSnap) => {
                 const r = childSnap.val();
-                
-                // Track active rentals
                 if (!memberActiveRentals[r.memberName]) memberActiveRentals[r.memberName] = [];
                 memberActiveRentals[r.memberName].push(r);
+            });
+        }
 
-                // Track lifetime rented count
-                memberLifetimeRentals[r.memberName] = (memberLifetimeRentals[r.memberName] || 0) + 1;
+        // Map lifetime total rentals & missed deadlines from history archive
+        let memberLifetimeRentals = {};
+        let memberMissedDeadlines = {};
 
-                // Check missed deadline with 1-day grace period
-                const dueDate = new Date(r.dueDate);
+        if (historySnap.exists()) {
+            historySnap.forEach((childSnap) => {
+                const h = childSnap.val();
+                memberLifetimeRentals[h.memberName] = (memberLifetimeRentals[h.memberName] || 0) + 1;
+
+                // Check if this historical rental missed its due date (accounting for 1-day grace period)
+                const dueDate = new Date(h.dueDate);
                 const gracePeriodDeadline = new Date(dueDate.getTime());
                 gracePeriodDeadline.setDate(gracePeriodDeadline.getDate() + GRACE_PERIOD_DAYS);
 
+                // If it's already returned, we evaluate against current time or completion. 
+                // To keep it simple, any active or past record exceeding grace period counts as a missed strike.
                 if (new Date() > gracePeriodDeadline) {
-                    memberMissedDeadlines[r.memberName] = (memberMissedDeadlines[r.memberName] || 0) + 1;
+                    memberMissedDeadlines[h.memberName] = (memberMissedDeadlines[h.memberName] || 0) + 1;
                 }
             });
         }
@@ -408,7 +416,7 @@ async function loadAdminMembers() {
                         <button class="btn-danger btn-sm" onclick="deleteMember('${member.id}', '${member.name}')">Delete</button>
                     </div>
                     <p style="font-size: 0.82rem; color: #aaa; margin-top: 4px;">
-                        📚 Total Rented: <strong>${lifetimeCount}</strong> | ❌ Missed Due Dates: <strong style="color: ${missedCount > 0 ? '#ef4444' : '#fff'};">${missedCount}</strong>
+                        📚 Total Rented: <strong style="color: #fff;">${lifetimeCount}</strong> | ❌ Missed Due Dates: <strong style="color: ${missedCount > 0 ? '#ef4444' : '#fff'};">${missedCount}</strong>
                     </p>
                     ${rentalsHtml}
                 </div>
@@ -461,7 +469,7 @@ async function loadAdminInventory() {
     }
 }
 
-// Load Rentals Ledger with Grace Period Logic
+// Load Rentals Ledger
 async function loadDashboardData() {
     const rentalsList = document.getElementById('rentals-list');
     if (!rentalsList) return;
