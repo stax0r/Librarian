@@ -20,10 +20,10 @@ if (logoutBtn) {
     });
 }
 
-// Helper function to format date as Month/Day (e.g., "9/23")
-function formatMonthDay(dateString) {
+// Helper function to format date as Full Month / Day (e.g., "September 23")
+function formatMonthNameDay(dateString) {
     const d = new Date(dateString);
-    return `${d.getMonth() + 1}/${d.getDate()}`;
+    return d.toLocaleDateString('en-US', { month: 'long', day: 'numeric' });
 }
 
 // Register Member
@@ -241,7 +241,7 @@ async function loadAdminInventory() {
     }
 }
 
-// Load Rentals with Clean Month/Day Format and Overdue Day Counts
+// Load Rentals with MMMM / DD Format and Overdue Day Counts
 async function loadDashboardData() {
     const rentalsList = document.getElementById('rentals-list');
     if (!rentalsList) return;
@@ -262,8 +262,8 @@ async function loadDashboardData() {
             const key = childSnap.key;
             const rental = childSnap.val();
             
-            const checkoutFormatted = formatMonthDay(rental.checkoutDate);
-            const dueFormatted = formatMonthDay(rental.dueDate);
+            const checkoutFormatted = formatMonthNameDay(rental.checkoutDate);
+            const dueFormatted = formatMonthNameDay(rental.dueDate);
             
             const dueDateObj = new Date(rental.dueDate);
             const now = new Date();
