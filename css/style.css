@@ -14,11 +14,31 @@ body {
     min-height: 100vh;
 }
 
-main,
-.container,
-.dashboard-container,
-.auth-container {
+main, .container, .dashboard-container, .auth-container {
     flex: 1;
+    max-width: 1200px; /* Aligns container width with header/footer */
+    margin-left: auto;
+    margin-right: auto;
+    width: 100%;
+}
+
+.dashboard-container {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 25px;
+}
+
+.container {
+    max-width: 1000px;
+}
+
+.auth-container {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    max-width: 450px;
+    margin: auto;
+    height: auto;
 }
 
 .site-header {
@@ -26,8 +46,8 @@ main,
     justify-content: space-between;
     align-items: center;
     border-bottom: 1px solid #333;
-    padding-bottom: 15px;
-    margin-bottom: 30px;
+    padding-bottom: 20px;
+    margin-bottom: 40px; /* Space between header and body */
     max-width: 1200px;
     margin-left: auto;
     margin-right: auto;
@@ -326,17 +346,18 @@ button:hover {
 
 .site-footer {
     border-top: 1px solid #333;
-    margin-top: auto;
+    margin-top: 60px; /* Space between body and footer */
     width: 100%;
     background-color: transparent;
+    padding-bottom: 0; /* Fixes content right on the very bottom */
 }
 
 .footer-content {
     display: flex;
     justify-content: space-between;
     align-items: center;
-    padding: 10px 0; /* Reduced padding to make it slim */
-    max-width: 1200px;
+    padding: 15px 0;
+    max-width: 1200px; /* Exact same max-width as header to align vertical lines */
     margin-left: auto;
     margin-right: auto;
     width: 100%;
@@ -359,7 +380,7 @@ button:hover {
     background-color: #1e1e1e;
     color: #e0e0e0;
     border: 1px solid #444;
-    padding: 4px 10px; /* Slimmer padding for the button */
+    padding: 4px 10px;
     border-radius: 6px;
     font-size: 0.85rem;
     font-weight: bold;
