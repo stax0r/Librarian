@@ -20,13 +20,12 @@ if (logoutBtn) {
     });
 }
 
-// Helper function to format date as Full Month / Day (e.g., "September 23")
 function formatMonthNameDay(dateString) {
     const d = new Date(dateString);
     return d.toLocaleDateString('en-US', { month: 'long', day: 'numeric' });
 }
 
-// Register Member with Unique Name Check
+// Register Unique Member
 const memberForm = document.getElementById('add-member-form');
 if (memberForm) {
     memberForm.addEventListener('submit', async (e) => {
@@ -48,7 +47,7 @@ if (memberForm) {
             }
 
             if (duplicateFound) {
-                alert(`Error: A character named "${nameInput}" is already registered! Character names must be unique.`);
+                alert(`Error: A character named "${nameInput}" is already registered!`);
                 return;
             }
 
@@ -63,13 +62,13 @@ if (memberForm) {
     });
 }
 
-// Add Book to Catalog / Inventory with Duplicate Name Check
-const bookForm = document.getElementById('add-book-form');
-if (bookForm) {
-    bookForm.addEventListener('submit', async (e) => {
+// Add Completely New Book to Catalog
+const catalogBookForm = document.getElementById('add-catalog-book-form');
+if (catalogBookForm) {
+    catalogBookForm.addEventListener('submit', async (e) => {
         e.preventDefault();
-        const titleInput = document.getElementById('book-title').value.trim();
-        const totalStock = parseInt(document.getElementById('book-stock').value);
+        const titleInput = document.getElementById('new-catalog-title').value.trim();
+        const totalStock = parseInt(document.getElementById('new-catalog-stock').value);
 
         try {
             const dbRef = ref(db);
@@ -96,25 +95,73 @@ if (bookForm) {
                 totalStock,
                 availableStock: totalStock
             });
-            alert("Book added to catalog and inventory!");
-            document.getElementById('book-title').value = '';
-            document.getElementById('book-stock').value = '1';
+            alert("New book added to catalog successfully!");
+            document.getElementById('new-catalog-title').value = '';
+            document.getElementById('new-catalog-stock').value = '1';
             loadAdminInventory();
             loadDropdowns();
         } catch (err) {
-            alert("Error adding book: " + err.message);
+            alert("Error adding book to catalog: " + err.message);
         }
     });
 }
 
-// Populate Checkout Dropdowns (Alphabetically Sorted)
-async function loadDropdowns() {
-    const bookSelect = document.getElementById('checkout-book-select');
-    const memberSelect = document.getElementById('checkout-member-select');
-    if (!bookSelect || !memberSelect) return;
+// Update Quantity of Existing Book Inventory
+const updateStockForm = document.getElementById('update-stock-form');
+if (updateStockForm) {
+    updateStockForm.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const bookSelect = document.getElementById('update-book-select');
+        const bookId = bookSelect.value;
+        const qtyChange = parseInt(document.getElementById('additional-stock-input').value);
 
-    bookSelect.innerHTML = '<option value="">Select Book...</option>';
-    memberSelect.innerHTML = '<option value="">Select Character...</option>';
+        if (!bookId) {
+            alert("Please select a book to update.");
+            return;
+        }
+
+        try {
+            const bookRef = ref(db, `books/${bookId}`);
+            const bookSnap = await get(bookRef);
+
+            if (!bookSnap.exists()) {
+                alert("Book record not found.");
+                return;
+            }
+
+            const bookData = bookSnap.val();
+            const newTotalStock = bookData.totalStock + qtyChange;
+            const newAvailableStock = bookData.availableStock + qtyChange;
+
+            if (newTotalStock < 0 || newAvailableStock < 0) {
+                alert("Error: Stock cannot drop below zero.");
+                return;
+            }
+
+            await update(bookRef, {
+                totalStock: newTotalStock,
+                availableStock: newAvailableStock
+            });
+
+            alert(`Successfully updated inventory quantity for "${bookData.title}"!`);
+            updateStockForm.reset();
+            loadAdminInventory();
+            loadDropdowns();
+        } catch (err) {
+            alert("Error updating stock quantity: " + err.message);
+        }
+    });
+}
+
+// Populate All Dropdowns (Checkout & Stock Update, Alphabetically Sorted)
+async function loadDropdowns() {
+    const checkoutBookSelect = document.getElementById('checkout-book-select');
+    const updateBookSelect = document.getElementById('update-book-select');
+    const memberSelect = document.getElementById('checkout-member-select');
+    
+    if (checkoutBookSelect) checkoutBookSelect.innerHTML = '<option value="">Select Book...</option>';
+    if (updateBookSelect) updateBookSelect.innerHTML = '<option value="">Select Book to Update...</option>';
+    if (memberSelect) memberSelect.innerHTML = '<option value="">Select Character...</option>';
 
     const dbRef = ref(db);
 
@@ -127,8 +174,11 @@ async function loadDropdowns() {
         booksList.sort((a, b) => a.title.localeCompare(b.title));
         
         booksList.forEach(book => {
-            if (book.availableStock > 0) {
-                bookSelect.innerHTML += `<option value="${book.id}" data-title="${book.title}" data-stock="${book.availableStock}">${book.title} (Available: ${book.availableStock})</option>`;
+            if (checkoutBookSelect && book.availableStock > 0) {
+                checkoutBookSelect.innerHTML += `<option value="${book.id}" data-title="${book.title}" data-stock="${book.availableStock}">${book.title} (Available: ${book.availableStock})</option>`;
+            }
+            if (updateBookSelect) {
+                updateBookSelect.innerHTML += `<option value="${book.id}">${book.title} (Total: ${book.totalStock}, Available: ${book.availableStock})</option>`;
             }
         });
     }
@@ -142,7 +192,9 @@ async function loadDropdowns() {
         membersList.sort((a, b) => a.name.localeCompare(b.name));
 
         membersList.forEach(member => {
-            memberSelect.innerHTML += `<option value="${member.name}">${member.name}</option>`;
+            if (memberSelect) {
+                memberSelect.innerHTML += `<option value="${member.name}">${member.name}</option>`;
+            }
         });
     }
 }

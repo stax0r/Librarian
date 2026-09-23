@@ -26,17 +26,34 @@
             </form>
         </section>
 
-        <!-- Section 2: Add New Book Inventory -->
+        <!-- Section 2A: Add Completely New Book to Catalog -->
         <section class="dash-card">
-            <h2>Add New Book</h2>
-            <form id="add-book-form">
+            <h2>Add New Book to Catalog</h2>
+            <form id="add-catalog-book-form">
                 <div class="form-group">
-                    <input type="text" id="book-title" placeholder="Book Title / Tome Name" required>
+                    <input type="text" id="new-catalog-title" placeholder="Book Title / Tome Name" required>
                 </div>
                 <div class="form-group">
-                    <input type="number" id="book-stock" placeholder="Total Copies" min="1" value="1" required>
+                    <input type="number" id="new-catalog-stock" placeholder="Initial Total Copies" min="1" value="1"
+                        required>
                 </div>
-                <button type="submit" class="btn-primary">Add to Inventory</button>
+                <button type="submit" class="btn-primary">Add to Catalog</button>
+            </form>
+        </section>
+
+        <!-- Section 2B: Update Existing Book Inventory Quantity -->
+        <section class="dash-card">
+            <h2>Update Book Inventory Quantity</h2>
+            <form id="update-stock-form">
+                <div class="form-group">
+                    <select id="update-book-select" required>
+                        <option value="">Select Book to Update...</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <input type="number" id="additional-stock-input" placeholder="Copies to Add (+/-)" required>
+                </div>
+                <button type="submit" class="btn-primary">Update Quantity</button>
             </form>
         </section>
 
